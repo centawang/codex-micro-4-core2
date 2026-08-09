@@ -76,6 +76,12 @@ PlatformIO 会自动安装工程锁定的 ESP32 平台和声明的 Arduino 库�
 CODEX_MICRO_READY
 ```
 
+运行不依赖实体硬件的 StickS3 按键单元测试：
+
+```sh
+pio test -e native
+```
+
 CoreS3 通过原生 USB CDC 提供串口，因此每次复位串口都会断开并重新枚举。
 
 常规应用固件位于：

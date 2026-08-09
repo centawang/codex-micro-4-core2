@@ -184,6 +184,8 @@ Agent ID 发送正常的按下/释放事件。单击 `BtnA` 通过标准键盘�
 Core2/CoreS3 触摸界面本地不计算双击间隔，也不判断打开设置所需的 500 ms
 按住时间，而是由 ChatGPT 桌面端解释按下和释放序列。StickS3 入口会在本地
 处理实体按键手势。
+`StickS3ButtonController` 不依赖 Arduino，单击、双击、长按、Agent 环绕和
+`millis()` 回绕行为由 native Unity 单元测试覆盖。
 
 ## 屏幕渲染流程
 

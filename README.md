@@ -81,6 +81,12 @@ boot prints:
 CODEX_MICRO_READY
 ```
 
+Run the hardware-independent StickS3 button tests with:
+
+```sh
+pio test -e native
+```
+
 CoreS3 exposes the serial monitor over native USB CDC, so the port disappears
 and re-enumerates on every reset.
 

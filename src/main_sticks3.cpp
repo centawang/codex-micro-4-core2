@@ -7,6 +7,9 @@
 #include <cmath>
 
 #include "CodexMicroBle.h"
+#include "StickS3AgentStatus.h"
+#include "StickS3ButtonController.h"
+#include "StickS3ScreenFlash.h"
 
 #if !defined(CODEX_MICRO_STICKS3)
 #error "main_sticks3.cpp is only for the m5stack-sticks3 environment"
@@ -22,10 +25,10 @@ constexpr uint16_t kMuted = 0x9CF3;
 constexpr uint16_t kAccent = 0x2E73;
 constexpr uint16_t kDisconnected = 0xF800;
 constexpr uint16_t kConnected = 0x07E0;
+constexpr uint16_t kFlashColor = 0xFFFF;
 constexpr int kHeaderHeight = 28;
 constexpr int kFooterHeight = 26;
 constexpr int kAgentCount = 6;
-constexpr uint32_t kDoubleClickMs = 350;
 
 const char* kAgentKeys[kAgentCount] = {"AG00", "AG01", "AG02",
                                       "AG03", "AG04", "AG05"};
@@ -33,11 +36,8 @@ const char* kAgentKeys[kAgentCount] = {"AG00", "AG01", "AG02",
 CodexMicroBle codex;
 CodexMicroState state;
 M5Canvas canvas(&M5.Display);
-int selectedAgent = 0;
-bool pendingButtonA = false;
-bool pendingButtonB = false;
-uint32_t buttonAReleaseMs = 0;
-uint32_t buttonBReleaseMs = 0;
+codex_micro::StickS3ButtonController buttons(kAgentCount);
+codex_micro::StickS3ScreenFlash screenFlash;
 uint32_t lastDrawMs = 0;
 uint32_t lastBatteryMs = 0;
 
@@ -50,6 +50,13 @@ uint16_t rgb888To565(uint32_t color, float brightness = 1.0f) {
 }
 
 void drawScreen() {
+  if (screenFlash.visible()) {
+    canvas.fillScreen(kFlashColor);
+    canvas.pushSprite(0, 0);
+    lastDrawMs = millis();
+    return;
+  }
+
   const int width = canvas.width();
   const int height = canvas.height();
   const int contentHeight = height - kHeaderHeight - kFooterHeight;
@@ -67,7 +74,7 @@ void drawScreen() {
 
   for (int i = 0; i < kAgentCount; ++i) {
     const int top = kHeaderHeight + i * rowHeight;
-    const bool selected = i == selectedAgent;
+    const bool selected = i == buttons.selectedAgent();
     const ThreadLight& light = state.threads[i];
     float pulse = 1.0f;
     if (light.effect == "breath") {
@@ -126,6 +133,29 @@ bool hasBreathingAgent() {
   return false;
 }
 
+void handleButtonAction(codex_micro::StickS3ButtonAction action) {
+  switch (action) {
+    case codex_micro::StickS3ButtonAction::SelectionChanged:
+      drawScreen();
+      break;
+    case codex_micro::StickS3ButtonAction::ActivateSelectedAgent: {
+      const int agent = buttons.selectedAgent();
+      codex.sendKey(kAgentKeys[agent], 1, agent);
+      delay(8);
+      codex.sendKey(kAgentKeys[agent], 0, agent);
+      break;
+    }
+    case codex_micro::StickS3ButtonAction::SendEnter:
+      codex.sendEnter();
+      break;
+    case codex_micro::StickS3ButtonAction::SendRightAlt:
+      codex.sendRightAlt();
+      break;
+    case codex_micro::StickS3ButtonAction::None:
+      break;
+  }
+}
+
 }  // namespace
 
 void setup() {
@@ -165,65 +195,41 @@ void loop() {
   codex.poll();
 
   if (M5.BtnB.wasHold()) {
-    pendingButtonB = false;
-    const int agent = selectedAgent;
-    codex.sendKey(kAgentKeys[agent], 1, agent);
-    delay(8);
-    codex.sendKey(kAgentKeys[agent], 0, agent);
+    handleButtonAction(buttons.onButtonBHold());
   }
 
   if (M5.BtnB.wasReleased()) {
-    if (M5.BtnB.wasReleasedAfterHold()) {
-      pendingButtonB = false;
-    } else {
-      const uint32_t now = millis();
-      if (pendingButtonB && now - buttonBReleaseMs <= kDoubleClickMs) {
-        pendingButtonB = false;
-        selectedAgent = (selectedAgent + kAgentCount - 1) % kAgentCount;
-        drawScreen();
-      } else {
-        if (pendingButtonB) {
-          selectedAgent = (selectedAgent + 1) % kAgentCount;
-          drawScreen();
-        }
-        pendingButtonB = true;
-        buttonBReleaseMs = now;
-      }
-    }
+    handleButtonAction(
+        buttons.onButtonBReleased(millis(), M5.BtnB.wasReleasedAfterHold()));
   }
 
   if (M5.BtnA.wasReleased()) {
-    const uint32_t now = millis();
-    if (pendingButtonA && now - buttonAReleaseMs <= kDoubleClickMs) {
-      pendingButtonA = false;
-      codex.sendRightAlt();
-    } else {
-      pendingButtonA = true;
-      buttonAReleaseMs = now;
-    }
+    handleButtonAction(buttons.onButtonAReleased(millis()));
   }
 
   const uint32_t now = millis();
-  if (pendingButtonA && now - buttonAReleaseMs > kDoubleClickMs) {
-    pendingButtonA = false;
-    codex.sendEnter();
-  }
-  if (pendingButtonB && !M5.BtnB.isPressed() &&
-      now - buttonBReleaseMs > kDoubleClickMs) {
-    pendingButtonB = false;
-    selectedAgent = (selectedAgent + 1) % kAgentCount;
-    drawScreen();
-  }
+  handleButtonAction(buttons.pollButtonA(now));
+  handleButtonAction(buttons.pollButtonB(now, M5.BtnB.isPressed()));
 
   CodexMicroState latest = codex.snapshot();
-  if (latest.dirty || latest.connected != state.connected) {
-    state = latest;
+  const bool statusChanged =
+      codex_micro::agentStatusesChanged(state.threads, latest.threads);
+  const bool stateNeedsRedraw =
+      latest.dirty || latest.connected != state.connected;
+  state = latest;
+  if (statusChanged) {
+    screenFlash.start(now);
+  }
+  if (stateNeedsRedraw || statusChanged) {
     drawScreen();
-  } else {
-    state = latest;
   }
 
-  if (hasBreathingAgent() && millis() - lastDrawMs > 80) {
+  const uint32_t animationNow = millis();
+  if (screenFlash.update(animationNow)) {
+    drawScreen();
+  }
+
+  if (hasBreathingAgent() && animationNow - lastDrawMs > 80) {
     drawScreen();
   }
 

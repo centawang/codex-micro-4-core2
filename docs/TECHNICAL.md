@@ -199,6 +199,9 @@ the dial press. Dial rotation controls send one encoder-step action immediately.
 The Core2/CoreS3 touch UI does not implement double-click timing or the 500 ms
 settings hold locally; ChatGPT Desktop interprets those press/release sequences.
 The StickS3 entry point handles its physical-button gestures locally.
+`StickS3ButtonController` contains this timing and selection state without any
+Arduino dependencies, so its single-click, double-click, hold, wraparound, and
+`millis()` rollover behavior is covered by native Unity tests.
 
 ## Display pipeline
 
