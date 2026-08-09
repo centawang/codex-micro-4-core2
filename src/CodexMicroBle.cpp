@@ -12,9 +12,16 @@ namespace {
 
 constexpr char kDeviceName[] = "Codex Micro";
 constexpr char kManufacturer[] = "Work Louder";
+#if defined(ARDUINO_M5STACK_CORES3)
+constexpr char kFirmwareVersion[] = "0.1.0-cores3";
+#else
 constexpr char kFirmwareVersion[] = "0.1.0-core2";
+#endif
 constexpr size_t kPayloadSize = 61;
 constexpr size_t kReportBodySize = 63;
+// Notifications are capped at MTU - 3, and the library defaults the local MTU
+// to 23, which would truncate every report body.
+constexpr uint16_t kAttMtu = 185;
 
 constexpr uint16_t swapBytes(uint16_t value) {
   return static_cast<uint16_t>((value << 8) | (value >> 8));
@@ -50,6 +57,16 @@ class SecurityCallbacks final : public BLESecurityCallbacks {
   }
 };
 
+class InputStatusCallbacks final : public BLECharacteristicCallbacks {
+ public:
+  void onStatus(BLECharacteristic*, Status status, uint32_t code) override {
+    if (status != Status::SUCCESS_NOTIFY) {
+      Serial.printf("Notify failed status=%d code=%u\n", static_cast<int>(status),
+                    code);
+    }
+  }
+};
+
 }  // namespace
 
 class CodexMicroBle::ServerCallbacks final : public BLEServerCallbacks {
@@ -73,7 +90,7 @@ class CodexMicroBle::OutputCallbacks final : public BLECharacteristicCallbacks {
 
   void onWrite(BLECharacteristic* characteristic) override {
     const std::string value = characteristic->getValue();
-    owner_.onOutput(reinterpret_cast<const uint8_t*>(value.data()), value.size());
+    owner_.queueOutput(reinterpret_cast<const uint8_t*>(value.data()), value.size());
   }
 
  private:
@@ -82,8 +99,10 @@ class CodexMicroBle::OutputCallbacks final : public BLECharacteristicCallbacks {
 
 void CodexMicroBle::begin() {
   stateMutex_ = xSemaphoreCreateMutex();
+  outputQueue_ = xQueueCreate(8, sizeof(OutputReport));
 
   BLEDevice::init(kDeviceName);
+  BLEDevice::setMTU(kAttMtu);
   BLEDevice::setSecurityCallbacks(new SecurityCallbacks());
 
   auto* security = new BLESecurity();
@@ -103,6 +122,7 @@ void CodexMicroBle::begin() {
   hid_->reportMap(const_cast<uint8_t*>(kReportMap), sizeof(kReportMap));
 
   input_ = hid_->inputReport(kReportId);
+  input_->setCallbacks(new InputStatusCallbacks());
   output_ = hid_->outputReport(kReportId);
   output_->setCallbacks(new OutputCallbacks(*this));
   hid_->startServices();
@@ -186,6 +206,28 @@ void CodexMicroBle::onConnected(bool connected) {
   xSemaphoreGive(stateMutex_);
   rpcBuffer_.clear();
   Serial.printf("BLE host %s\n", connected ? "connected" : "disconnected");
+}
+
+// Runs on the Bluedroid callback task, whose stack cannot absorb JSON parsing
+// and a reply notification, so only the raw report is captured here.
+void CodexMicroBle::queueOutput(const uint8_t* data, size_t length) {
+  if (outputQueue_ == nullptr || data == nullptr || length == 0) {
+    return;
+  }
+  OutputReport report;
+  report.length = static_cast<uint8_t>(min<size_t>(length, sizeof(report.data)));
+  memcpy(report.data, data, report.length);
+  xQueueSend(outputQueue_, &report, 0);
+}
+
+void CodexMicroBle::poll() {
+  if (outputQueue_ == nullptr) {
+    return;
+  }
+  OutputReport report;
+  while (xQueueReceive(outputQueue_, &report, 0) == pdTRUE) {
+    onOutput(report.data, report.length);
+  }
 }
 
 void CodexMicroBle::onOutput(const uint8_t* data, size_t length) {

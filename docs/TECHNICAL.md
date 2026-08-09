@@ -42,10 +42,10 @@ The PlatformIO environment is intentionally small:
 | Setting | Value |
 | --- | --- |
 | Platform | `espressif32@6.13.0` |
-| Board | `m5stack-core2` |
+| Board | `m5stack-core2` (ESP32) or `m5stack-cores3` (ESP32-S3) |
 | Framework | Arduino |
 | Serial monitor | 115200 baud |
-| Upload speed | 1,500,000 baud |
+| Upload speed | 1,500,000 baud (Core2), 921,600 baud (CoreS3) |
 | Display and hardware library | `M5Unified ^0.2.7` |
 | JSON library | `ArduinoJson ^6.21.5` |
 
@@ -152,7 +152,7 @@ Directional angles are normalized turns rather than radians:
 
 | Method | Behavior |
 | --- | --- |
-| `sys.version` | Returns firmware version `0.1.0-core2` |
+| `sys.version` | Returns firmware version `0.1.0-core2` or `0.1.0-cores3` |
 | `device.status` | Returns version, profile, layer, battery, and charging state |
 | `v.oai.thstatus` | Updates one or more of the six Agent status lights |
 | `v.oai.rgbcfg` | Stores host ambient and key lighting configuration |
@@ -181,7 +181,9 @@ is not rendered because Core2 has no equivalent per-key lighting hardware.
 ## Input mapping
 
 The display uses three pages. Page selection is available from the bottom tabs
-and from Core2's A, B, and C touch buttons.
+and from Core2's A, B, and C touch buttons. CoreS3's digitizer covers only the
+320 x 240 panel, so M5Unified never reports those buttons there and the tab bar
+is the only page control.
 
 Touch hit areas are fixed for the 320 x 240 landscape orientation. Press and
 release events are sent for Agent Keys, Command Keys, directional controls, and

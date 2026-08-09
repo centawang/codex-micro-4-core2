@@ -34,7 +34,7 @@ This is a vendor-control surface, not a general-purpose Bluetooth keyboard.
 
 | Component | Supported or tested state |
 | --- | --- |
-| Hardware | M5Stack Core2 tested on physical hardware |
+| Hardware | M5Stack Core2 tested on physical hardware; M5Stack CoreS3 supported by the `m5stack-cores3` build environment |
 | Host OS | macOS tested |
 | Host app | ChatGPT Desktop with Codex Micro support |
 | Transport | Bluetooth Low Energy HID only |
@@ -46,7 +46,7 @@ control, and Work Louder Input have not been validated.
 
 ## Requirements
 
-- M5Stack Core2
+- M5Stack Core2 or M5Stack CoreS3
 - A data-capable USB-C cable for flashing
 - [PlatformIO Core](https://docs.platformio.org/en/latest/core/index.html) or
   the PlatformIO IDE extension
@@ -55,11 +55,14 @@ control, and Work Louder Input have not been validated.
 
 ## Build and flash
 
+The project defines two PlatformIO environments. `m5stack-cores3` is the
+default; pass `-e m5stack-core2` to target a Core2.
+
 Clone the repository and run:
 
 ```sh
-pio run
-pio run --target upload
+pio run -e m5stack-cores3
+pio run -e m5stack-cores3 --target upload
 pio device monitor
 ```
 
@@ -71,10 +74,13 @@ boot prints:
 CODEX_MICRO_READY
 ```
 
+CoreS3 exposes the serial monitor over native USB CDC, so the port disappears
+and re-enumerates on every reset.
+
 The normal application binary is generated at:
 
 ```text
-.pio/build/m5stack-core2/firmware.bin
+.pio/build/m5stack-cores3/firmware.bin
 ```
 
 ## Pair with ChatGPT Desktop
@@ -99,7 +105,8 @@ this Core2 firmware.
 ## Controls
 
 Core2's bottom A, B, and C touch buttons switch directly between the three
-pages.
+pages. CoreS3's digitizer stops at the bottom edge of the panel, so it has no
+equivalent hardware buttons; use the on-screen tab bar instead.
 
 ### Tasks page
 
@@ -115,8 +122,8 @@ pages.
 | --- | --- |
 | Fast | Toggle Fast mode |
 | Approve | Approve the current request |
-| Decline | Decline the current request |
-| Fork | Continue in a new task |
+| Reject | Decline the current request |
+| New chat | Continue the thread in a new chat |
 | Mic | Hold for push-to-talk; double-press behavior is handled by the host |
 | Send | Send the composer message |
 
@@ -126,6 +133,7 @@ captured or streamed by this firmware.
 ### Navigate page
 
 - `UP`, `RIGHT`, `DOWN`, and `LEFT` emulate the four analog-stick directions.
+  Their sublabels show the host defaults: Plan mode, Forward, Sidebar, and Back.
 - `CCW` and `CW` emulate one dial step in each direction.
 - Tap `DIAL` to press the dial.
 - Hold `DIAL` for at least 500 ms to request Codex Micro settings.
@@ -182,8 +190,9 @@ NOTICE.md                 Copyright, trademarks, and disclaimers
 ### Display shows `Canvas allocation failed`
 
 The full-screen 16-bit framebuffer could not be allocated. Restart the device.
-If it persists, verify that the target is an M5Stack Core2 with working PSRAM
-and that the unmodified `m5stack-core2` PlatformIO board definition is used.
+If it persists, verify that the target is an M5Stack Core2 or CoreS3 with
+working PSRAM and that the unmodified `m5stack-core2` or `m5stack-cores3`
+PlatformIO board definition is used.
 
 ### Serial diagnostics
 

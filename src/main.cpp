@@ -10,6 +10,16 @@
 
 namespace {
 
+#if defined(ARDUINO_M5STACK_CORES3)
+constexpr char kBoardName[] = "CoreS3";
+// CoreS3's digitizer ends at the bottom of the panel, so M5Unified never
+// reports BtnA/BtnB/BtnC. Page switching relies on the on-screen tab bar.
+constexpr bool kHasBottomButtons = false;
+#else
+constexpr char kBoardName[] = "Core2";
+constexpr bool kHasBottomButtons = true;
+#endif
+
 enum class Page : uint8_t { Tasks, Commands, Navigate };
 
 struct TouchAction {
@@ -40,8 +50,13 @@ constexpr int kTabHeight = 28;
 constexpr int kContentBottom = 240 - kTabHeight;
 
 const char* kAgentKeys[] = {"AG00", "AG01", "AG02", "AG03", "AG04", "AG05"};
+// The host folds ACT10 into the double-width ACT10_ACT11 slot, which carries
+// the push-to-talk keycap.
 const char* kCommandKeys[] = {"ACT06", "ACT07", "ACT08", "ACT09", "ACT10", "ACT12"};
-const char* kCommandLabels[] = {"FAST", "APPROVE", "DECLINE", "FORK", "MIC", "SEND"};
+// Labels mirror the keycaps configured in ChatGPT Desktop, which the protocol
+// never reports, so they have to be kept in sync by hand.
+const char* kCommandLabels[] = {"YOLO", "APPROVE", "REJECT", "NEW CHAT", "EMPTY", "SEND"};
+const char* kCommandHints[] = {"COMPOSER TEXT", "TAP", "TAP", "TAP", "UNASSIGNED", "TAP"};
 
 CodexMicroBle codex;
 CodexMicroState state;
@@ -134,16 +149,16 @@ void drawCommands() {
     const int x = 5 + col * 105;
     const int y = 35 + row * 87;
     const bool pressed = touchActive && activeAction.key == kCommandKeys[i];
-    const char* hint = i == 4 ? "HOLD / 2X" : "TAP";
-    drawButton(x, y, 100, 80, kCommandLabels[i], i == 1 ? 0x07E0 : kAccent, pressed, hint);
+    const uint16_t border = i == 1 ? 0x07E0 : (i == 4 ? kMuted : kAccent);
+    drawButton(x, y, 100, 80, kCommandLabels[i], border, pressed, kCommandHints[i]);
   }
 }
 
 void drawNavigate() {
-  drawButton(18, 42, 70, 48, "UP", kAccent, touchActive && activeAction.joystick && activeAction.angle == 0.75f);
-  drawButton(18, 148, 70, 48, "DOWN", kAccent, touchActive && activeAction.joystick && activeAction.angle == 0.25f);
-  drawButton(2, 95, 70, 48, "LEFT", kAccent, touchActive && activeAction.joystick && activeAction.angle == 0.5f);
-  drawButton(76, 95, 70, 48, "RIGHT", kAccent, touchActive && activeAction.joystick && activeAction.angle == 0.0f);
+  drawButton(18, 42, 70, 48, "UP", kAccent, touchActive && activeAction.joystick && activeAction.angle == 0.75f, "PLAN");
+  drawButton(18, 148, 70, 48, "DOWN", kAccent, touchActive && activeAction.joystick && activeAction.angle == 0.25f, "SIDEBAR");
+  drawButton(2, 95, 70, 48, "LEFT", kAccent, touchActive && activeAction.joystick && activeAction.angle == 0.5f, "BACK");
+  drawButton(76, 95, 70, 48, "RIGHT", kAccent, touchActive && activeAction.joystick && activeAction.angle == 0.0f, "FORWARD");
 
   drawButton(166, 42, 68, 64, "CCW", 0xFFE0,
              touchActive && activeAction.key != nullptr && strcmp(activeAction.key, "ENC_CC") == 0,
@@ -255,8 +270,13 @@ void updateBattery() {
 
 void setup() {
   Serial.begin(115200);
+#if ARDUINO_USB_CDC_ON_BOOT
+  // Native-USB targets need time for the host to enumerate the CDC port.
+  delay(600);
+#else
   delay(100);
-  Serial.println("Codex Micro Core2 boot");
+#endif
+  Serial.printf("Codex Micro %s boot\n", kBoardName);
 
   auto config = M5.config();
   config.clear_display = true;
@@ -285,6 +305,7 @@ void setup() {
 
 void loop() {
   M5.update();
+  codex.poll();
   const auto touch = M5.Touch.getDetail();
   if (touch.wasPressed()) {
     pressAction(actionAt(touch.x, touch.y));
@@ -293,15 +314,17 @@ void loop() {
     releaseAction();
   }
 
-  if (M5.BtnA.wasPressed()) {
-    page = Page::Tasks;
-    drawScreen();
-  } else if (M5.BtnB.wasPressed()) {
-    page = Page::Commands;
-    drawScreen();
-  } else if (M5.BtnC.wasPressed()) {
-    page = Page::Navigate;
-    drawScreen();
+  if (kHasBottomButtons) {
+    if (M5.BtnA.wasPressed()) {
+      page = Page::Tasks;
+      drawScreen();
+    } else if (M5.BtnB.wasPressed()) {
+      page = Page::Commands;
+      drawScreen();
+    } else if (M5.BtnC.wasPressed()) {
+      page = Page::Navigate;
+      drawScreen();
+    }
   }
 
   CodexMicroState latest = codex.snapshot();

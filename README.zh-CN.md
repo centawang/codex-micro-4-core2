@@ -31,7 +31,7 @@ Codex Micro 功能的蓝牙控制器。
 
 | 项目 | 支持或测试状态 |
 | --- | --- |
-| 硬件 | 已在 M5Stack Core2 实机上测试 |
+| 硬件 | 已在 M5Stack Core2 实机上测试；M5Stack CoreS3 由 `m5stack-cores3` 构建环境支持 |
 | 主机系统 | 已测试 macOS |
 | 主机应用 | 支持 Codex Micro 的 ChatGPT 桌面端 |
 | 通信方式 | 仅支持 Bluetooth Low Energy HID |
@@ -42,7 +42,7 @@ Codex Micro 功能的蓝牙控制器。
 
 ## 准备工作
 
-- M5Stack Core2
+- M5Stack Core2 或 M5Stack CoreS3
 - 支持数据传输的 USB-C 线
 - [PlatformIO Core](https://docs.platformio.org/en/latest/core/index.html) 或
   PlatformIO IDE 扩展
@@ -51,11 +51,14 @@ Codex Micro 功能的蓝牙控制器。
 
 ## 编译和烧录
 
+工程提供两个 PlatformIO 环境。默认环境为 `m5stack-cores3`；如需烧录 Core2，
+请改用 `-e m5stack-core2`。
+
 克隆仓库后执行：
 
 ```sh
-pio run
-pio run --target upload
+pio run -e m5stack-cores3
+pio run -e m5stack-cores3 --target upload
 pio device monitor
 ```
 
@@ -66,10 +69,12 @@ PlatformIO 会自动安装工程锁定的 ESP32 平台和声明的 Arduino 库�
 CODEX_MICRO_READY
 ```
 
+CoreS3 通过原生 USB CDC 提供串口，因此每次复位串口都会断开并重新枚举。
+
 常规应用固件位于：
 
 ```text
-.pio/build/m5stack-core2/firmware.bin
+.pio/build/m5stack-cores3/firmware.bin
 ```
 
 ## 与 ChatGPT 桌面端配对
@@ -90,7 +95,8 @@ USB 模式、物理配对控件、灯光硬件和额外层说明不适用于本 
 
 ## 操作说明
 
-Core2 底部的 A、B、C 触摸按钮可直接切换三个页面。
+Core2 底部的 A、B、C 触摸按钮可直接切换三个页面。CoreS3 的触摸区域止于屏幕
+下边缘，没有对应的硬件按钮，请使用屏幕底部的标签栏切换页面。
 
 ### Tasks 页面
 
@@ -106,8 +112,8 @@ Core2 底部的 A、B、C 触摸按钮可直接切换三个页面。
 | --- | --- |
 | Fast | 开关 Fast 模式 |
 | Approve | 批准当前请求 |
-| Decline | 拒绝当前请求 |
-| Fork | 在新任务中继续当前任务 |
+| Reject | 拒绝当前请求 |
+| New chat | 在新对话中继续当前任务 |
 | Mic | 按住说话；双击行为由主机处理 |
 | Send | 发送编辑框中的消息 |
 
@@ -115,7 +121,8 @@ Mic 动作使用电脑麦克风。本固件不会采集或通过蓝牙传输 Cor
 
 ### Navigate 页面
 
-- `UP`、`RIGHT`、`DOWN`、`LEFT` 模拟摇杆的四个方向。
+- `UP`、`RIGHT`、`DOWN`、`LEFT` 模拟摇杆的四个方向，副标签显示主机默认
+  动作：Plan 模式、前进、侧边栏、后退。
 - `CCW` 和 `CW` 分别模拟一次旋钮逆时针和顺时针步进。
 - 点击 `DIAL` 模拟按下旋钮。
 - 按住 `DIAL` 至少 500 ms，请求打开 Codex Micro 设置。
@@ -170,8 +177,8 @@ NOTICE.md                 版权、商标和免责声明
 ### 屏幕显示 `Canvas allocation failed`
 
 固件无法分配全屏 16 位帧缓冲。请先重启设备；如果问题持续出现，请确认目标
-硬件是带有可用 PSRAM 的 M5Stack Core2，并使用工程原有的 `m5stack-core2`
-PlatformIO 开发板定义。
+硬件是带有可用 PSRAM 的 M5Stack Core2 或 CoreS3，并使用工程原有的
+`m5stack-core2` 或 `m5stack-cores3` PlatformIO 开发板定义。
 
 ### 串口诊断
 

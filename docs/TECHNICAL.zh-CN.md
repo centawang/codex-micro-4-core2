@@ -39,10 +39,10 @@ PlatformIO 环境保持精简并锁定关键版本：
 | 设置 | 值 |
 | --- | --- |
 | Platform | `espressif32@6.13.0` |
-| Board | `m5stack-core2` |
+| Board | `m5stack-core2`（ESP32）或 `m5stack-cores3`（ESP32-S3） |
 | Framework | Arduino |
 | 串口监视器 | 115200 baud |
-| 烧录速度 | 1,500,000 baud |
+| 烧录速度 | Core2 1,500,000 baud；CoreS3 921,600 baud |
 | 屏幕和硬件库 | `M5Unified ^0.2.7` |
 | JSON 库 | `ArduinoJson ^6.21.5` |
 
@@ -140,7 +140,7 @@ Agent ID 为 `AG00` 至 `AG05`。默认 Command ID 为 `ACT06`、`ACT07`、
 
 | Method | 行为 |
 | --- | --- |
-| `sys.version` | 返回固件版本 `0.1.0-core2` |
+| `sys.version` | 返回固件版本 `0.1.0-core2` 或 `0.1.0-cores3` |
 | `device.status` | 返回版本、Profile、Layer、电池和充电状态 |
 | `v.oai.thstatus` | 更新 6 个 Agent 状态灯中的一个或多个 |
 | `v.oai.rgbcfg` | 保存主机下发的环境灯光和按键灯光配置 |
@@ -168,6 +168,8 @@ Agent ID 为 `AG00` 至 `AG05`。默认 Command ID 为 `ACT06`、`ACT07`、
 ## 输入映射
 
 屏幕包含三个页面。可以使用底部标签或 Core2 的 A、B、C 触摸按钮切换页面。
+CoreS3 的触摸面板只覆盖 320 x 240 屏幕区域，M5Unified 不会上报这三个按钮，
+因此只能使用底部标签栏切换页面。
 
 触摸命中区域按 320 x 240 横屏方向固定。Agent Key、Command Key、方向控件和
 旋钮按下都会发送按下与释放事件。旋钮旋转控件在触摸时立即发送一次步进动作。

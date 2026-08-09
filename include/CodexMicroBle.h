@@ -8,6 +8,8 @@
 #include <BLECharacteristic.h>
 #include <BLEHIDDevice.h>
 #include <BLEServer.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
 
 #include <array>
 
@@ -43,6 +45,8 @@ class CodexMicroBle {
   void setBattery(uint8_t percentage, bool charging);
   void sendKey(const char* key, uint8_t action, int8_t agent = -1);
   void sendJoystick(float angle, float distance);
+  // Must be called from the Arduino task; host requests are handled there.
+  void poll();
   bool connected();
   CodexMicroState snapshot();
 
@@ -50,7 +54,13 @@ class CodexMicroBle {
   class ServerCallbacks;
   class OutputCallbacks;
 
+  struct OutputReport {
+    uint8_t length = 0;
+    uint8_t data[64] = {};
+  };
+
   void onConnected(bool connected);
+  void queueOutput(const uint8_t* data, size_t length);
   void onOutput(const uint8_t* data, size_t length);
   void handleRpc(const JsonDocument& request);
   void sendResult(JsonVariantConst id, JsonVariantConst result);
@@ -63,6 +73,7 @@ class CodexMicroBle {
   BLECharacteristic* input_ = nullptr;
   BLECharacteristic* output_ = nullptr;
   SemaphoreHandle_t stateMutex_ = nullptr;
+  QueueHandle_t outputQueue_ = nullptr;
   CodexMicroState state_;
   String rpcBuffer_;
   uint8_t batteryPercentage_ = 100;
