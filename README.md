@@ -1,10 +1,10 @@
-# M5Stack Core2 Codex Micro
+# M5Stack Codex Micro
 
 [简体中文](README.zh-CN.md)
 
-An independent, open-source compatibility firmware that turns an M5Stack Core2
-into a Bluetooth controller for Codex Micro features in the ChatGPT desktop
-app.
+An independent, open-source compatibility firmware that turns an M5Stack
+Core2, CoreS3, or StickS3 into a Bluetooth controller for Codex Micro features
+in the ChatGPT desktop app.
 
 The firmware presents the Core2 as a BLE vendor HID device and provides a
 touchscreen interface for six Agent Keys, six Command Keys, four analog-stick
@@ -34,7 +34,7 @@ This is a vendor-control surface, not a general-purpose Bluetooth keyboard.
 
 | Component | Supported or tested state |
 | --- | --- |
-| Hardware | M5Stack Core2 tested on physical hardware; M5Stack CoreS3 supported by the `m5stack-cores3` build environment |
+| Hardware | M5Stack Core2 tested on physical hardware; CoreS3 and the Tasks-only StickS3 target have dedicated build environments |
 | Host OS | macOS tested |
 | Host app | ChatGPT Desktop with Codex Micro support |
 | Transport | Bluetooth Low Energy HID only |
@@ -46,7 +46,7 @@ control, and Work Louder Input have not been validated.
 
 ## Requirements
 
-- M5Stack Core2 or M5Stack CoreS3
+- M5Stack Core2, CoreS3, or StickS3
 - A data-capable USB-C cable for flashing
 - [PlatformIO Core](https://docs.platformio.org/en/latest/core/index.html) or
   the PlatformIO IDE extension
@@ -55,8 +55,8 @@ control, and Work Louder Input have not been validated.
 
 ## Build and flash
 
-The project defines two PlatformIO environments. `m5stack-cores3` is the
-default; pass `-e m5stack-core2` to target a Core2.
+The project defines three PlatformIO environments. `m5stack-cores3` is the
+default; pass `-e m5stack-core2` or `-e m5stack-sticks3` for another target.
 
 Clone the repository and run:
 
@@ -64,6 +64,13 @@ Clone the repository and run:
 pio run -e m5stack-cores3
 pio run -e m5stack-cores3 --target upload
 pio device monitor
+```
+
+For the Tasks-only StickS3 firmware, use:
+
+```sh
+pio run -e m5stack-sticks3
+pio run -e m5stack-sticks3 --target upload
 ```
 
 PlatformIO installs the pinned ESP32 platform and the declared Arduino
@@ -116,6 +123,12 @@ equivalent hardware buttons; use the on-screen tab bar instead.
 | Colored border and dot | Show the status color sent by ChatGPT Desktop |
 | Breathing border | Show an animated status supplied by the host |
 
+On StickS3, all six Agent states are shown in one compact list. Press `BtnB`
+once to select the next Agent, double-press it within 350 ms to select the
+previous Agent, or hold it for 500 ms to switch to the highlighted Agent. Press
+`BtnA` once to emit Enter or double-press it within 350 ms to emit Right Alt.
+The StickS3 build intentionally omits the Commands and Navigate pages.
+
 ### Commands page
 
 | Key | Default ChatGPT Desktop action |
@@ -165,6 +178,7 @@ limitations.
 include/CodexMicroBle.h   BLE transport and shared state declarations
 src/CodexMicroBle.cpp     HID descriptor, framing, and RPC handling
 src/main.cpp              Core2 UI, touch mapping, battery, and render loop
+src/main_sticks3.cpp      StickS3 Tasks-only UI and button controls
 docs/TECHNICAL.md         Implementation and protocol notes
 platformio.ini            Reproducible PlatformIO environment
 LICENSE                   MIT License

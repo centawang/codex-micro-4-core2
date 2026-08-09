@@ -40,11 +40,14 @@ class CodexMicroBle {
   static constexpr uint16_t kVendorId = 0x303A;
   static constexpr uint16_t kProductId = 0x8360;
   static constexpr uint8_t kReportId = 6;
+  static constexpr uint8_t kKeyboardReportId = 1;
 
   void begin();
   void setBattery(uint8_t percentage, bool charging);
   void sendKey(const char* key, uint8_t action, int8_t agent = -1);
   void sendJoystick(float angle, float distance);
+  void sendEnter();
+  void sendRightAlt();
   // Must be called from the Arduino task; host requests are handled there.
   void poll();
   bool connected();
@@ -66,12 +69,14 @@ class CodexMicroBle {
   void sendResult(JsonVariantConst id, JsonVariantConst result);
   void sendSuccess(JsonVariantConst id);
   void sendJson(const String& json);
+  void sendKeyboard(uint8_t modifier, uint8_t key);
   void updateThreadLighting(JsonArrayConst values);
   void updateLightingSide(LightingSide& side, JsonObjectConst value);
 
   BLEHIDDevice* hid_ = nullptr;
   BLECharacteristic* input_ = nullptr;
   BLECharacteristic* output_ = nullptr;
+  BLECharacteristic* keyboardInput_ = nullptr;
   SemaphoreHandle_t stateMutex_ = nullptr;
   QueueHandle_t outputQueue_ = nullptr;
   CodexMicroState state_;

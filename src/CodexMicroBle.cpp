@@ -12,13 +12,18 @@ namespace {
 
 constexpr char kDeviceName[] = "Codex Micro";
 constexpr char kManufacturer[] = "Work Louder";
-#if defined(ARDUINO_M5STACK_CORES3)
+#if defined(CODEX_MICRO_STICKS3)
+constexpr char kFirmwareVersion[] = "0.1.0-sticks3";
+#elif defined(ARDUINO_M5STACK_CORES3)
 constexpr char kFirmwareVersion[] = "0.1.0-cores3";
 #else
 constexpr char kFirmwareVersion[] = "0.1.0-core2";
 #endif
 constexpr size_t kPayloadSize = 61;
 constexpr size_t kReportBodySize = 63;
+constexpr size_t kKeyboardReportSize = 8;
+constexpr uint8_t kRightAltModifier = 0x40;
+constexpr uint8_t kEnterKey = 0x28;
 // Notifications are capped at MTU - 3, and the library defaults the local MTU
 // to 23, which would truncate every report body.
 constexpr uint16_t kAttMtu = 185;
@@ -27,9 +32,36 @@ constexpr uint16_t swapBytes(uint16_t value) {
   return static_cast<uint16_t>((value << 8) | (value >> 8));
 }
 
-// One vendor-defined input/output report. HIDAPI adds/removes Report ID 6,
-// while the BLE characteristics carry the remaining 63-byte report body.
+// StickS3 additionally exposes a standard keyboard input report so BtnA can
+// emit Right Alt without changing the vendor protocol. HIDAPI adds/removes
+// report IDs, while the BLE characteristics carry only each report body.
 const uint8_t kReportMap[] = {
+#if defined(CODEX_MICRO_STICKS3)
+    0x05, 0x01,              // Usage Page (Generic Desktop)
+    0x09, 0x06,              // Usage (Keyboard)
+    0xA1, 0x01,              // Collection (Application)
+    0x85, 0x01,              // Report ID (1)
+    0x05, 0x07,              // Usage Page (Keyboard/Keypad)
+    0x19, 0xE0,              // Usage Minimum (Left Control)
+    0x29, 0xE7,              // Usage Maximum (Right GUI)
+    0x15, 0x00,              // Logical Minimum (0)
+    0x25, 0x01,              // Logical Maximum (1)
+    0x75, 0x01,              // Report Size (1)
+    0x95, 0x08,              // Report Count (8 modifiers)
+    0x81, 0x02,              // Input (Data, Variable, Absolute)
+    0x95, 0x01,              // Report Count (1)
+    0x75, 0x08,              // Report Size (8)
+    0x81, 0x01,              // Input (Constant, Array, Absolute)
+    0x95, 0x06,              // Report Count (6 keys)
+    0x75, 0x08,              // Report Size (8)
+    0x15, 0x00,              // Logical Minimum (0)
+    0x25, 0x65,              // Logical Maximum (101)
+    0x05, 0x07,              // Usage Page (Keyboard/Keypad)
+    0x19, 0x00,              // Usage Minimum (Reserved)
+    0x29, 0x65,              // Usage Maximum (Keyboard Application)
+    0x81, 0x00,              // Input (Data, Array, Absolute)
+    0xC0,                    // End Collection
+#endif
     0x06, 0x00, 0xFF,        // Usage Page (Vendor Defined 0xFF00)
     0x09, 0x01,              // Usage (1)
     0xA1, 0x01,              // Collection (Application)
@@ -125,6 +157,10 @@ void CodexMicroBle::begin() {
   input_->setCallbacks(new InputStatusCallbacks());
   output_ = hid_->outputReport(kReportId);
   output_->setCallbacks(new OutputCallbacks(*this));
+#if defined(CODEX_MICRO_STICKS3)
+  keyboardInput_ = hid_->inputReport(kKeyboardReportId);
+  keyboardInput_->setCallbacks(new InputStatusCallbacks());
+#endif
   hid_->startServices();
   hid_->setBatteryLevel(batteryPercentage_);
 
@@ -175,6 +211,33 @@ void CodexMicroBle::sendJoystick(float angle, float distance) {
   String json;
   serializeJson(message, json);
   sendJson(json);
+}
+
+void CodexMicroBle::sendEnter() {
+  sendKeyboard(0, kEnterKey);
+  Serial.println("Keyboard Enter");
+}
+
+void CodexMicroBle::sendRightAlt() {
+  sendKeyboard(kRightAltModifier, 0);
+  Serial.println("Keyboard Right Alt");
+}
+
+void CodexMicroBle::sendKeyboard(uint8_t modifier, uint8_t key) {
+  if (keyboardInput_ == nullptr || !connected()) {
+    return;
+  }
+
+  uint8_t report[kKeyboardReportSize] = {};
+  report[0] = modifier;
+  report[2] = key;
+  keyboardInput_->setValue(report, sizeof(report));
+  keyboardInput_->notify();
+  delay(8);
+
+  memset(report, 0, sizeof(report));
+  keyboardInput_->setValue(report, sizeof(report));
+  keyboardInput_->notify();
 }
 
 bool CodexMicroBle::connected() {

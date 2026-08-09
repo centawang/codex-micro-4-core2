@@ -9,7 +9,9 @@
 
 固件由两个主要层次组成：
 
-1. `src/main.cpp` 负责 Core2 屏幕、触摸区域检测、页面状态、电池轮询和渲染循环。
+1. `src/main.cpp` 负责 Core2/CoreS3 屏幕、触摸区域检测、页面状态、电池轮询和
+   渲染循环；`src/main_sticks3.cpp` 为较小的 StickS3 屏幕和两个按键提供独立的
+   Tasks 精简入口。
 2. `src/CodexMicroBle.cpp` 负责 BLE 初始化、HID 描述符、报告分帧、JSON 解析、
    主机请求处理和向主机发送通知。
 
@@ -39,7 +41,7 @@ PlatformIO 环境保持精简并锁定关键版本：
 | 设置 | 值 |
 | --- | --- |
 | Platform | `espressif32@6.13.0` |
-| Board | `m5stack-core2`（ESP32）或 `m5stack-cores3`（ESP32-S3） |
+| Board | `m5stack-core2`、`m5stack-cores3`，或按 StickS3 配置的通用 `esp32-s3-devkitc-1` |
 | Framework | Arduino |
 | 串口监视器 | 115200 baud |
 | 烧录速度 | Core2 1,500,000 baud；CoreS3 921,600 baud |
@@ -140,7 +142,7 @@ Agent ID 为 `AG00` 至 `AG05`。默认 Command ID 为 `ACT06`、`ACT07`、
 
 | Method | 行为 |
 | --- | --- |
-| `sys.version` | 返回固件版本 `0.1.0-core2` 或 `0.1.0-cores3` |
+| `sys.version` | 返回 `0.1.0-core2`、`0.1.0-cores3` 或 `0.1.0-sticks3` |
 | `device.status` | 返回版本、Profile、Layer、电池和充电状态 |
 | `v.oai.thstatus` | 更新 6 个 Agent 状态灯中的一个或多个 |
 | `v.oai.rgbcfg` | 保存主机下发的环境灯光和按键灯光配置 |
@@ -171,11 +173,17 @@ Agent ID 为 `AG00` 至 `AG05`。默认 Command ID 为 `ACT06`、`ACT07`、
 CoreS3 的触摸面板只覆盖 320 x 240 屏幕区域，M5Unified 不会上报这三个按钮，
 因此只能使用底部标签栏切换页面。
 
+StickS3 入口没有触摸页面，而是以竖向列表显示全部 6 个 Agent 状态。单击
+`BtnB` 向后移动高亮项，在 350 ms 内双击向前移动，长按 500 ms 为当前高亮
+Agent ID 发送正常的按下/释放事件。单击 `BtnA` 通过标准键盘报告发送回车，
+双击则发送右 Alt。
+
 触摸命中区域按 320 x 240 横屏方向固定。Agent Key、Command Key、方向控件和
 旋钮按下都会发送按下与释放事件。旋钮旋转控件在触摸时立即发送一次步进动作。
 
-固件本地不计算双击间隔，也不判断打开设置所需的 500 ms 按住时间。固件发送
-普通的按下和释放事件，由 ChatGPT 桌面端解释手势持续时间和点击序列。
+Core2/CoreS3 触摸界面本地不计算双击间隔，也不判断打开设置所需的 500 ms
+按住时间，而是由 ChatGPT 桌面端解释按下和释放序列。StickS3 入口会在本地
+处理实体按键手势。
 
 ## 屏幕渲染流程
 
@@ -191,6 +199,7 @@ CoreS3 的触摸面板只覆盖 320 x 240 屏幕区域，M5Unified 不会上报�
 
 存在 `breath` 效果的任务状态大约每 80 ms 重绘一次。其他页面仅在触摸输入、
 连接变化或主机状态变化时重绘。
+StickS3 构建使用相同的双缓冲流程，分辨率为原生 135 x 240 竖屏。
 
 ## 电池与电源
 

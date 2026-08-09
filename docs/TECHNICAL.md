@@ -10,8 +10,9 @@ and compatibility behavior, not a stable or official API specification.
 
 The firmware has two main layers:
 
-1. `src/main.cpp` owns the Core2 display, touch hit testing, page state,
-   battery polling, and render loop.
+1. `src/main.cpp` owns the Core2/CoreS3 display, touch hit testing, page state,
+   battery polling, and render loop. `src/main_sticks3.cpp` provides a separate
+   Tasks-only entry point for the smaller StickS3 display and two buttons.
 2. `src/CodexMicroBle.cpp` owns BLE setup, the HID descriptor, report framing,
    JSON parsing, host request handling, and notifications sent to the host.
 
@@ -42,7 +43,7 @@ The PlatformIO environment is intentionally small:
 | Setting | Value |
 | --- | --- |
 | Platform | `espressif32@6.13.0` |
-| Board | `m5stack-core2` (ESP32) or `m5stack-cores3` (ESP32-S3) |
+| Board | `m5stack-core2`, `m5stack-cores3`, or generic `esp32-s3-devkitc-1` configured for StickS3 |
 | Framework | Arduino |
 | Serial monitor | 115200 baud |
 | Upload speed | 1,500,000 baud (Core2), 921,600 baud (CoreS3) |
@@ -152,7 +153,7 @@ Directional angles are normalized turns rather than radians:
 
 | Method | Behavior |
 | --- | --- |
-| `sys.version` | Returns firmware version `0.1.0-core2` or `0.1.0-cores3` |
+| `sys.version` | Returns `0.1.0-core2`, `0.1.0-cores3`, or `0.1.0-sticks3` |
 | `device.status` | Returns version, profile, layer, battery, and charging state |
 | `v.oai.thstatus` | Updates one or more of the six Agent status lights |
 | `v.oai.rgbcfg` | Stores host ambient and key lighting configuration |
@@ -185,13 +186,19 @@ and from Core2's A, B, and C touch buttons. CoreS3's digitizer covers only the
 320 x 240 panel, so M5Unified never reports those buttons there and the tab bar
 is the only page control.
 
+The StickS3 entry point has no touch pages. It renders all six Agent states as
+a vertical list. A single `BtnB` click advances the highlight, a double-click
+within 350 ms moves it back, and a 500 ms hold emits the normal press/release
+pair for the highlighted Agent ID. A single `BtnA` click emits Enter, while a
+double-click emits Right Alt through the separate standard keyboard report.
+
 Touch hit areas are fixed for the 320 x 240 landscape orientation. Press and
 release events are sent for Agent Keys, Command Keys, directional controls, and
 the dial press. Dial rotation controls send one encoder-step action immediately.
 
-The firmware does not implement double-click timing or the 500 ms settings hold
-locally. It sends normal press and release timestamps; ChatGPT Desktop interprets
-the gesture duration and click sequence.
+The Core2/CoreS3 touch UI does not implement double-click timing or the 500 ms
+settings hold locally; ChatGPT Desktop interprets those press/release sequences.
+The StickS3 entry point handles its physical-button gestures locally.
 
 ## Display pipeline
 
@@ -209,6 +216,8 @@ direct display rendering. If allocation fails, the firmware stops and displays
 
 Task status with a `breath` effect is redrawn approximately every 80 ms. Other
 screens redraw on input, connection changes, or host state changes.
+The StickS3 build uses the same double-buffered pipeline at its native 135 x 240
+portrait resolution.
 
 ## Battery and power
 

@@ -1,9 +1,9 @@
-# M5Stack Core2 Codex Micro
+# M5Stack Codex Micro
 
 [English](README.md)
 
-这是一个独立开发的开源兼容固件，可将 M5Stack Core2 变成 ChatGPT 桌面端
-Codex Micro 功能的蓝牙控制器。
+这是一个独立开发的开源兼容固件，可将 M5Stack Core2、CoreS3 或 StickS3
+变成 ChatGPT 桌面端 Codex Micro 功能的蓝牙控制器。
 
 固件将 Core2 模拟为 BLE Vendor HID 设备，并通过触摸屏提供 6 个 Agent Key、
 6 个 Command Key、4 个摇杆方向和旋钮操作。任务状态颜色、电池状态、按键映射
@@ -31,7 +31,7 @@ Codex Micro 功能的蓝牙控制器。
 
 | 项目 | 支持或测试状态 |
 | --- | --- |
-| 硬件 | 已在 M5Stack Core2 实机上测试；M5Stack CoreS3 由 `m5stack-cores3` 构建环境支持 |
+| 硬件 | 已在 M5Stack Core2 实机上测试；CoreS3 和仅支持 Tasks 的 StickS3 均有独立构建环境 |
 | 主机系统 | 已测试 macOS |
 | 主机应用 | 支持 Codex Micro 的 ChatGPT 桌面端 |
 | 通信方式 | 仅支持 Bluetooth Low Energy HID |
@@ -42,7 +42,7 @@ Codex Micro 功能的蓝牙控制器。
 
 ## 准备工作
 
-- M5Stack Core2 或 M5Stack CoreS3
+- M5Stack Core2、CoreS3 或 StickS3
 - 支持数据传输的 USB-C 线
 - [PlatformIO Core](https://docs.platformio.org/en/latest/core/index.html) 或
   PlatformIO IDE 扩展
@@ -51,8 +51,8 @@ Codex Micro 功能的蓝牙控制器。
 
 ## 编译和烧录
 
-工程提供两个 PlatformIO 环境。默认环境为 `m5stack-cores3`；如需烧录 Core2，
-请改用 `-e m5stack-core2`。
+工程提供三个 PlatformIO 环境。默认环境为 `m5stack-cores3`；其他目标请使用
+`-e m5stack-core2` 或 `-e m5stack-sticks3`。
 
 克隆仓库后执行：
 
@@ -60,6 +60,13 @@ Codex Micro 功能的蓝牙控制器。
 pio run -e m5stack-cores3
 pio run -e m5stack-cores3 --target upload
 pio device monitor
+```
+
+如需构建仅支持 Tasks 功能的 StickS3 固件，请执行：
+
+```sh
+pio run -e m5stack-sticks3
+pio run -e m5stack-sticks3 --target upload
 ```
 
 PlatformIO 会自动安装工程锁定的 ESP32 平台和声明的 Arduino 库。串口监视器
@@ -105,6 +112,11 @@ Core2 底部的 A、B、C 触摸按钮可直接切换三个页面。CoreS3 的�
 | Agent 1 至 Agent 6 | 选择对应的 Codex 任务槽位 |
 | 彩色边框和圆点 | 显示 ChatGPT 桌面端下发的任务状态颜色 |
 | 呼吸边框 | 显示主机下发的动态状态 |
+
+StickS3 会在一个紧凑列表中显示全部 6 个 Agent 状态。单击 `BtnB` 选择下一个
+Agent，在 350 ms 内双击选择上一个 Agent，长按 500 ms 切换到当前高亮 Agent。
+单击 `BtnA` 发送回车，在 350 ms 内双击 `BtnA` 发送右 Alt。StickS3 构建
+有意省略 Commands 和 Navigate 页面。
 
 ### Commands 页面
 
@@ -153,6 +165,7 @@ HID 描述符、报告分帧、RPC 方法、并发模型、渲染流程和协议
 include/CodexMicroBle.h   BLE 传输和共享状态声明
 src/CodexMicroBle.cpp     HID 描述符、分帧和 RPC 处理
 src/main.cpp              Core2 界面、触摸映射、电池和渲染循环
+src/main_sticks3.cpp      StickS3 精简 Tasks 界面和按键控制
 docs/TECHNICAL.zh-CN.md   实现和协议说明
 platformio.ini            可复现的 PlatformIO 环境
 LICENSE                   MIT License
