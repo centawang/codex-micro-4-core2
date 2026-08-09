@@ -9,6 +9,7 @@
 #include "CodexMicroBle.h"
 #include "StickS3AgentStatus.h"
 #include "StickS3ButtonController.h"
+#include "StickS3PowerController.h"
 #include "StickS3ScreenFlash.h"
 
 #if !defined(CODEX_MICRO_STICKS3)
@@ -26,6 +27,8 @@ constexpr uint16_t kAccent = 0x2E73;
 constexpr uint16_t kDisconnected = 0xF800;
 constexpr uint16_t kConnected = 0x07E0;
 constexpr uint16_t kFlashColor = 0xFFFF;
+constexpr uint8_t kNormalBrightness = 120;
+constexpr uint8_t kDimBrightness = 20;
 constexpr int kHeaderHeight = 28;
 constexpr int kFooterHeight = 26;
 constexpr int kAgentCount = 6;
@@ -37,6 +40,7 @@ CodexMicroBle codex;
 CodexMicroState state;
 M5Canvas canvas(&M5.Display);
 codex_micro::StickS3ButtonController buttons(kAgentCount);
+codex_micro::StickS3PowerController powerController;
 codex_micro::StickS3ScreenFlash screenFlash;
 uint32_t lastDrawMs = 0;
 uint32_t lastBatteryMs = 0;
@@ -156,6 +160,23 @@ void handleButtonAction(codex_micro::StickS3ButtonAction action) {
   }
 }
 
+void handlePowerAction(codex_micro::StickS3PowerAction action) {
+  switch (action) {
+    case codex_micro::StickS3PowerAction::DimDisplay:
+      M5.Display.setBrightness(kDimBrightness);
+      break;
+    case codex_micro::StickS3PowerAction::RestoreDisplay:
+      M5.Display.setBrightness(kNormalBrightness);
+      break;
+    case codex_micro::StickS3PowerAction::PowerOff:
+      Serial.println("Inactivity timeout; powering off");
+      M5.Power.powerOff();
+      break;
+    case codex_micro::StickS3PowerAction::None:
+      break;
+  }
+}
+
 }  // namespace
 
 void setup() {
@@ -167,7 +188,7 @@ void setup() {
   config.clear_display = true;
   M5.begin(config);
   M5.Display.setRotation(0);
-  M5.Display.setBrightness(120);
+  M5.Display.setBrightness(kNormalBrightness);
   M5.Display.setTextWrap(false);
 
   canvas.setColorDepth(16);
@@ -185,6 +206,7 @@ void setup() {
 
   codex.begin();
   state = codex.snapshot();
+  powerController.begin(millis());
   updateBattery();
   drawScreen();
   Serial.println("CODEX_MICRO_READY");
@@ -193,6 +215,11 @@ void setup() {
 void loop() {
   M5.update();
   codex.poll();
+
+  const uint32_t inputNow = millis();
+  if (M5.BtnA.wasPressed() || M5.BtnB.wasPressed()) {
+    handlePowerAction(powerController.onActivity(inputNow));
+  }
 
   if (M5.BtnB.wasHold()) {
     handleButtonAction(buttons.onButtonBHold());
@@ -218,6 +245,7 @@ void loop() {
       latest.dirty || latest.connected != state.connected;
   state = latest;
   if (statusChanged) {
+    handlePowerAction(powerController.onActivity(now));
     screenFlash.start(now);
   }
   if (stateNeedsRedraw || statusChanged) {
@@ -234,5 +262,6 @@ void loop() {
   }
 
   updateBattery();
+  handlePowerAction(powerController.update(millis()));
   delay(8);
 }

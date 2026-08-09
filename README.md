@@ -133,7 +133,10 @@ On StickS3, all six Agent states are shown in one compact list. Press `BtnB`
 once to select the next Agent, double-press it within 350 ms to select the
 previous Agent, or hold it for 500 ms to switch to the highlighted Agent. Press
 `BtnA` once to emit Enter or double-press it within 350 ms to emit Right Alt.
-The StickS3 build intentionally omits the Commands and Navigate pages.
+The display dims after one minute without a button press or Agent status change,
+returns to normal brightness on either activity, and powers off after 30 minutes
+of inactivity. The StickS3 build intentionally omits the Commands and Navigate
+pages.
 
 ### Commands page
 

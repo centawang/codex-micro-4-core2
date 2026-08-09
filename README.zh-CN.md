@@ -122,7 +122,9 @@ Core2 底部的 A、B、C 触摸按钮可直接切换三个页面。CoreS3 的�
 StickS3 会在一个紧凑列表中显示全部 6 个 Agent 状态。单击 `BtnB` 选择下一个
 Agent，在 350 ms 内双击选择上一个 Agent，长按 500 ms 切换到当前高亮 Agent。
 单击 `BtnA` 发送回车，在 350 ms 内双击 `BtnA` 发送右 Alt。StickS3 构建
-有意省略 Commands 和 Navigate 页面。
+在没有按键或 Agent 状态变化 1 分钟后降低屏幕亮度，任一活动会恢复正常亮度并
+重置计时；连续 30 分钟无活动则自动关机。StickS3 构建有意省略 Commands 和
+Navigate 页面。
 
 ### Commands 页面
 

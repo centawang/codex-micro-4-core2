@@ -7,12 +7,15 @@
 
 #include "StickS3AgentStatus.h"
 #include "StickS3ButtonController.h"
+#include "StickS3PowerController.h"
 #include "StickS3ScreenFlash.h"
 
 namespace {
 
 using codex_micro::StickS3ButtonAction;
 using codex_micro::StickS3ButtonController;
+using codex_micro::StickS3PowerAction;
+using codex_micro::StickS3PowerController;
 using codex_micro::StickS3ScreenFlash;
 
 struct FakeAgentStatus {
@@ -32,6 +35,12 @@ struct FakeAgentStatuses {
 };
 
 void expectAction(StickS3ButtonAction actual, StickS3ButtonAction expected) {
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(expected),
+                          static_cast<uint8_t>(actual));
+}
+
+void expectPowerAction(StickS3PowerAction actual,
+                       StickS3PowerAction expected) {
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(expected),
                           static_cast<uint8_t>(actual));
 }
@@ -367,6 +376,74 @@ void testEmptyAgentStatusCollectionsAreUnchanged() {
   TEST_ASSERT_FALSE(codex_micro::agentStatusesChanged(before, after));
 }
 
+void testPowerControllerDimsAtOneMinuteBoundary() {
+  StickS3PowerController power;
+  power.begin(1000);
+
+  expectPowerAction(power.update(60999), StickS3PowerAction::None);
+  expectPowerAction(power.update(61000), StickS3PowerAction::DimDisplay);
+  expectPowerAction(power.update(62000), StickS3PowerAction::None);
+}
+
+void testActivityRestoresBrightnessAndRestartsTimeouts() {
+  StickS3PowerController power;
+  power.begin(0);
+  expectPowerAction(power.update(60000), StickS3PowerAction::DimDisplay);
+
+  expectPowerAction(power.onActivity(70000),
+                    StickS3PowerAction::RestoreDisplay);
+  expectPowerAction(power.update(129999), StickS3PowerAction::None);
+  expectPowerAction(power.update(130000), StickS3PowerAction::DimDisplay);
+  expectPowerAction(power.onActivity(140000),
+                    StickS3PowerAction::RestoreDisplay);
+}
+
+void testActivityWhileBrightOnlyRestartsTimeouts() {
+  StickS3PowerController power;
+  power.begin(1000);
+
+  expectPowerAction(power.onActivity(50000), StickS3PowerAction::None);
+  expectPowerAction(power.update(109999), StickS3PowerAction::None);
+  expectPowerAction(power.update(110000), StickS3PowerAction::DimDisplay);
+}
+
+void testPowerControllerPowersOffAtThirtyMinuteBoundaryOnce() {
+  StickS3PowerController power;
+  power.begin(1000);
+
+  expectPowerAction(power.update(61000), StickS3PowerAction::DimDisplay);
+  expectPowerAction(power.update(1800999), StickS3PowerAction::None);
+  expectPowerAction(power.update(1801000), StickS3PowerAction::PowerOff);
+  expectPowerAction(power.update(1802000), StickS3PowerAction::None);
+}
+
+void testLatePowerPollSkipsDimAndPowersOffImmediately() {
+  StickS3PowerController power;
+  power.begin(0);
+
+  expectPowerAction(power.update(1800000), StickS3PowerAction::PowerOff);
+}
+
+void testPowerTimeoutsSurviveMillisRollover() {
+  StickS3PowerController power;
+  constexpr uint32_t start = UINT32_MAX - 30000;
+  power.begin(start);
+
+  expectPowerAction(power.update(29998), StickS3PowerAction::None);
+  expectPowerAction(power.update(29999), StickS3PowerAction::DimDisplay);
+  expectPowerAction(power.onActivity(40000),
+                    StickS3PowerAction::RestoreDisplay);
+  expectPowerAction(power.update(1840000), StickS3PowerAction::PowerOff);
+}
+
+void testFirstPowerUpdateInitializesActivityTimer() {
+  StickS3PowerController power;
+
+  expectPowerAction(power.update(5000), StickS3PowerAction::None);
+  expectPowerAction(power.update(64999), StickS3PowerAction::None);
+  expectPowerAction(power.update(65000), StickS3PowerAction::DimDisplay);
+}
+
 }  // namespace
 
 void setUp() {}
@@ -400,5 +477,12 @@ int main(int, char**) {
   RUN_TEST(testIdenticalNondefaultAgentStatusesDoNotTriggerFlash);
   RUN_TEST(testAgentStatusCollectionSizeChangeTriggersFlash);
   RUN_TEST(testEmptyAgentStatusCollectionsAreUnchanged);
+  RUN_TEST(testPowerControllerDimsAtOneMinuteBoundary);
+  RUN_TEST(testActivityRestoresBrightnessAndRestartsTimeouts);
+  RUN_TEST(testActivityWhileBrightOnlyRestartsTimeouts);
+  RUN_TEST(testPowerControllerPowersOffAtThirtyMinuteBoundaryOnce);
+  RUN_TEST(testLatePowerPollSkipsDimAndPowersOffImmediately);
+  RUN_TEST(testPowerTimeoutsSurviveMillisRollover);
+  RUN_TEST(testFirstPowerUpdateInitializesActivityTimer);
   return UNITY_END();
 }

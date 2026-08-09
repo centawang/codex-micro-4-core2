@@ -232,6 +232,12 @@ fallback.
 The standard BLE HID battery characteristic is updated while connected, and
 `device.status` returns both the cached percentage and charging state.
 
+StickS3 treats a physical button press or an actual change to any Agent's
+lighting state as activity. Its display brightness drops from 120 to 20 after
+one inactive minute. Activity immediately restores brightness and restarts both
+timeouts. After 30 inactive minutes, the firmware calls M5Unified's hardware
+power-off path; the physical power button starts the device again.
+
 ## Pairing and security
 
 The BLE stack requests bonding with `ESP_IO_CAP_NONE`, resulting in a "Just
