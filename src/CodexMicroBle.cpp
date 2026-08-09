@@ -22,7 +22,6 @@ constexpr char kFirmwareVersion[] = "0.1.0-core2";
 constexpr size_t kPayloadSize = 61;
 constexpr size_t kReportBodySize = 63;
 constexpr size_t kKeyboardReportSize = 8;
-constexpr uint8_t kRightAltModifier = 0x40;
 constexpr uint8_t kEnterKey = 0x28;
 // Notifications are capped at MTU - 3, and the library defaults the local MTU
 // to 23, which would truncate every report body.
@@ -36,7 +35,6 @@ constexpr uint16_t swapBytes(uint16_t value) {
 // emit Right Alt without changing the vendor protocol. HIDAPI adds/removes
 // report IDs, while the BLE characteristics carry only each report body.
 const uint8_t kReportMap[] = {
-#if defined(CODEX_MICRO_STICKS3)
     0x05, 0x01,              // Usage Page (Generic Desktop)
     0x09, 0x06,              // Usage (Keyboard)
     0xA1, 0x01,              // Collection (Application)
@@ -61,7 +59,6 @@ const uint8_t kReportMap[] = {
     0x29, 0x65,              // Usage Maximum (Keyboard Application)
     0x81, 0x00,              // Input (Data, Array, Absolute)
     0xC0,                    // End Collection
-#endif
     0x06, 0x00, 0xFF,        // Usage Page (Vendor Defined 0xFF00)
     0x09, 0x01,              // Usage (1)
     0xA1, 0x01,              // Collection (Application)
@@ -157,10 +154,8 @@ void CodexMicroBle::begin() {
   input_->setCallbacks(new InputStatusCallbacks());
   output_ = hid_->outputReport(kReportId);
   output_->setCallbacks(new OutputCallbacks(*this));
-#if defined(CODEX_MICRO_STICKS3)
   keyboardInput_ = hid_->inputReport(kKeyboardReportId);
   keyboardInput_->setCallbacks(new InputStatusCallbacks());
-#endif
   hid_->startServices();
   hid_->setBatteryLevel(batteryPercentage_);
 
@@ -238,6 +233,19 @@ void CodexMicroBle::sendKeyboard(uint8_t modifier, uint8_t key) {
   memset(report, 0, sizeof(report));
   keyboardInput_->setValue(report, sizeof(report));
   keyboardInput_->notify();
+}
+
+// Held rather than tapped, so the host sees a real press-and-hold.
+void CodexMicroBle::setModifier(uint8_t modifier) {
+  if (keyboardInput_ == nullptr || !connected()) {
+    return;
+  }
+
+  uint8_t report[kKeyboardReportSize] = {};
+  report[0] = modifier;
+  keyboardInput_->setValue(report, sizeof(report));
+  keyboardInput_->notify();
+  Serial.printf("Keyboard modifier=0x%02X\n", modifier);
 }
 
 bool CodexMicroBle::connected() {

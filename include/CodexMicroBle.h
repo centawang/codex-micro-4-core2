@@ -41,6 +41,7 @@ class CodexMicroBle {
   static constexpr uint16_t kProductId = 0x8360;
   static constexpr uint8_t kReportId = 6;
   static constexpr uint8_t kKeyboardReportId = 1;
+  static constexpr uint8_t kRightAltModifier = 0x40;
 
   void begin();
   void setBattery(uint8_t percentage, bool charging);
@@ -48,6 +49,7 @@ class CodexMicroBle {
   void sendJoystick(float angle, float distance);
   void sendEnter();
   void sendRightAlt();
+  void setModifier(uint8_t modifier);
   // Must be called from the Arduino task; host requests are handled there.
   void poll();
   bool connected();

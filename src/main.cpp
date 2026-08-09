@@ -21,6 +21,7 @@ constexpr bool kHasBottomButtons = true;
 #endif
 
 enum class Page : uint8_t { Tasks, Commands, Navigate };
+enum class CommandIcon : uint8_t { Download, Approve, Reject, Fork, Mic, Send };
 
 struct TouchAction {
   const char* key = nullptr;
@@ -28,15 +29,17 @@ struct TouchAction {
   bool encoderStep = false;
   bool joystick = false;
   float angle = 0.0f;
+  uint8_t modifier = 0;
 
   TouchAction() = default;
   TouchAction(const char* keyValue, int8_t agentValue, bool encoderStepValue,
-              bool joystickValue, float angleValue)
+              bool joystickValue, float angleValue, uint8_t modifierValue = 0)
       : key(keyValue),
         agent(agentValue),
         encoderStep(encoderStepValue),
         joystick(joystickValue),
-        angle(angleValue) {}
+        angle(angleValue),
+        modifier(modifierValue) {}
 };
 
 constexpr uint16_t kBackground = 0x0841;
@@ -53,10 +56,11 @@ const char* kAgentKeys[] = {"AG00", "AG01", "AG02", "AG03", "AG04", "AG05"};
 // The host folds ACT10 into the double-width ACT10_ACT11 slot, which carries
 // the push-to-talk keycap.
 const char* kCommandKeys[] = {"ACT06", "ACT07", "ACT08", "ACT09", "ACT10", "ACT12"};
-// Labels mirror the keycaps configured in ChatGPT Desktop, which the protocol
-// never reports, so they have to be kept in sync by hand.
-const char* kCommandLabels[] = {"YOLO", "APPROVE", "REJECT", "NEW CHAT", "EMPTY", "SEND"};
-const char* kCommandHints[] = {"COMPOSER TEXT", "TAP", "TAP", "TAP", "UNASSIGNED", "TAP"};
+const CommandIcon kCommandIcons[] = {CommandIcon::Download, CommandIcon::Approve,
+                                     CommandIcon::Reject, CommandIcon::Fork,
+                                     CommandIcon::Mic, CommandIcon::Send};
+// The mic keycap holds Right Alt instead of emitting the vendor key event.
+constexpr int kMicCommandIndex = 4;
 
 CodexMicroBle codex;
 CodexMicroState state;
@@ -119,6 +123,93 @@ void drawButton(int x, int y, int width, int height, const char* label, uint16_t
   }
 }
 
+void drawIconLine(int x0, int y0, int x1, int y1, uint16_t color) {
+  canvas.drawLine(x0, y0, x1, y1, color);
+  canvas.drawLine(x0 + 1, y0, x1 + 1, y1, color);
+  canvas.drawLine(x0, y0 + 1, x1, y1 + 1, color);
+}
+
+void drawCommandIcon(CommandIcon icon, int x, int y, uint16_t color) {
+  switch (icon) {
+    case CommandIcon::Download:
+      drawIconLine(x, y - 15, x, y + 3, color);
+      drawIconLine(x - 6, y - 2, x, y + 4, color);
+      drawIconLine(x, y + 4, x + 6, y - 2, color);
+      drawIconLine(x - 13, y + 5, x - 13, y + 11, color);
+      drawIconLine(x - 13, y + 11, x + 13, y + 11, color);
+      drawIconLine(x + 13, y + 11, x + 13, y + 5, color);
+      break;
+
+    case CommandIcon::Approve:
+      canvas.drawCircle(x, y, 14, color);
+      canvas.drawCircle(x, y, 13, color);
+      drawIconLine(x - 7, y, x - 2, y + 6, color);
+      drawIconLine(x - 2, y + 6, x + 8, y - 7, color);
+      break;
+
+    case CommandIcon::Reject:
+      canvas.drawCircle(x, y, 14, color);
+      canvas.drawCircle(x, y, 13, color);
+      drawIconLine(x - 6, y - 6, x + 6, y + 6, color);
+      drawIconLine(x + 6, y - 6, x - 6, y + 6, color);
+      break;
+
+    case CommandIcon::Fork:
+      drawIconLine(x - 13, y, x - 3, y, color);
+      drawIconLine(x - 3, y, x + 10, y - 11, color);
+      drawIconLine(x - 3, y, x + 10, y + 11, color);
+      drawIconLine(x + 3, y - 11, x + 10, y - 11, color);
+      drawIconLine(x + 10, y - 11, x + 10, y - 4, color);
+      drawIconLine(x + 3, y + 11, x + 10, y + 11, color);
+      drawIconLine(x + 10, y + 4, x + 10, y + 11, color);
+      break;
+
+    case CommandIcon::Mic:
+      canvas.drawRoundRect(x - 6, y - 15, 13, 22, 6, color);
+      canvas.drawRoundRect(x - 5, y - 14, 11, 20, 5, color);
+      drawIconLine(x - 12, y - 2, x - 12, y + 3, color);
+      drawIconLine(x - 12, y + 3, x - 7, y + 9, color);
+      drawIconLine(x - 7, y + 9, x, y + 11, color);
+      drawIconLine(x, y + 11, x + 7, y + 9, color);
+      drawIconLine(x + 7, y + 9, x + 12, y + 3, color);
+      drawIconLine(x + 12, y + 3, x + 12, y - 2, color);
+      drawIconLine(x, y + 11, x, y + 16, color);
+      drawIconLine(x - 5, y + 16, x + 5, y + 16, color);
+      break;
+
+    case CommandIcon::Send:
+      // Scalloped send/assistant glyph from the reference keycap.
+      drawIconLine(x - 7, y - 14, x - 2, y - 16, color);
+      drawIconLine(x - 2, y - 16, x + 3, y - 14, color);
+      drawIconLine(x + 3, y - 14, x + 8, y - 13, color);
+      drawIconLine(x + 8, y - 13, x + 10, y - 8, color);
+      drawIconLine(x + 10, y - 8, x + 14, y - 4, color);
+      drawIconLine(x + 14, y - 4, x + 13, y + 2, color);
+      drawIconLine(x + 13, y + 2, x + 11, y + 7, color);
+      drawIconLine(x + 11, y + 7, x + 6, y + 9, color);
+      drawIconLine(x + 6, y + 9, x + 3, y + 14, color);
+      drawIconLine(x + 3, y + 14, x - 3, y + 13, color);
+      drawIconLine(x - 3, y + 13, x - 8, y + 11, color);
+      drawIconLine(x - 8, y + 11, x - 9, y + 6, color);
+      drawIconLine(x - 9, y + 6, x - 13, y + 2, color);
+      drawIconLine(x - 13, y + 2, x - 12, y - 4, color);
+      drawIconLine(x - 12, y - 4, x - 10, y - 10, color);
+      drawIconLine(x - 10, y - 10, x - 7, y - 14, color);
+      canvas.fillCircle(x - 5, y - 2, 2, color);
+      drawIconLine(x, y + 2, x + 4, y + 3, color);
+      drawIconLine(x + 4, y + 3, x + 7, y + 1, color);
+      break;
+  }
+}
+
+void drawCommandButton(int x, int y, int width, int height, CommandIcon icon,
+                       uint16_t border, bool pressed) {
+  canvas.fillRoundRect(x, y, width, height, 6,
+                       pressed ? kPanelPressed : kPanel);
+  canvas.drawRoundRect(x, y, width, height, 6, border);
+  drawCommandIcon(icon, x + width / 2, y + height / 2, kText);
+}
+
 void drawTasks() {
   for (int i = 0; i < 6; ++i) {
     const int row = i / 3;
@@ -149,8 +240,8 @@ void drawCommands() {
     const int x = 5 + col * 105;
     const int y = 35 + row * 87;
     const bool pressed = touchActive && activeAction.key == kCommandKeys[i];
-    const uint16_t border = i == 1 ? 0x07E0 : (i == 4 ? kMuted : kAccent);
-    drawButton(x, y, 100, 80, kCommandLabels[i], border, pressed, kCommandHints[i]);
+    const uint16_t border = i == 1 ? 0x07E0 : kAccent;
+    drawCommandButton(x, y, 100, 80, kCommandIcons[i], border, pressed);
   }
 }
 
@@ -216,7 +307,9 @@ TouchAction actionAt(int x, int y) {
       const int row = (y - 35) / 87;
       if (col < 3 && row < 2 && inRect(x, y, 5 + col * 105, 35 + row * 87, 100, 80)) {
         const int index = row * 3 + col;
-        return {kCommandKeys[index], -1, false, false, 0.0f};
+        const uint8_t modifier =
+            index == kMicCommandIndex ? CodexMicroBle::kRightAltModifier : 0;
+        return {kCommandKeys[index], -1, false, false, 0.0f, modifier};
       }
     }
   } else {
@@ -233,10 +326,12 @@ TouchAction actionAt(int x, int y) {
 
 void pressAction(const TouchAction& action) {
   activeAction = action;
-  touchActive = action.key != nullptr || action.joystick;
+  touchActive = action.key != nullptr || action.joystick || action.modifier != 0;
   if (!touchActive) return;
 
-  if (action.joystick) {
+  if (action.modifier != 0) {
+    codex.setModifier(action.modifier);
+  } else if (action.joystick) {
     codex.sendJoystick(action.angle, 1.0f);
   } else if (action.encoderStep) {
     codex.sendKey(action.key, 2);
@@ -248,7 +343,9 @@ void pressAction(const TouchAction& action) {
 
 void releaseAction() {
   if (!touchActive) return;
-  if (activeAction.joystick) {
+  if (activeAction.modifier != 0) {
+    codex.setModifier(0);
+  } else if (activeAction.joystick) {
     codex.sendJoystick(activeAction.angle, 0.0f);
   } else if (!activeAction.encoderStep && activeAction.key != nullptr) {
     codex.sendKey(activeAction.key, 0, activeAction.agent);
