@@ -7,6 +7,7 @@
 #include <cmath>
 
 #include "CodexMicroBle.h"
+#include "CoreAgentCardStyle.h"
 
 namespace {
 
@@ -123,6 +124,19 @@ void drawButton(int x, int y, int width, int height, const char* label, uint16_t
   }
 }
 
+void drawAgentButton(int x, int y, int width, int height, const char* label,
+                     uint16_t statusColor, bool assigned, bool pressed,
+                     const char* sublabel) {
+  const uint16_t fill =
+      codex_micro::agentCardFill(statusColor, assigned, pressed, kPanel);
+  const uint16_t text =
+      codex_micro::agentCardTextColor(fill, kText, kBackground);
+  canvas.fillRoundRect(x, y, width, height, 6, fill);
+  canvas.drawRoundRect(x, y, width, height, 6, statusColor);
+  drawCentered(label, x + width / 2, y + height / 2 - 7, 2, text);
+  drawCentered(sublabel, x + width / 2, y + height / 2 + 13, 1, text);
+}
+
 void drawIconLine(int x0, int y0, int x1, int y1, uint16_t color) {
   canvas.drawLine(x0, y0, x1, y1, color);
   canvas.drawLine(x0 + 1, y0, x1 + 1, y1, color);
@@ -221,15 +235,14 @@ void drawTasks() {
     if (light.effect == "breath") {
       pulse = 0.55f + 0.45f * (std::sin(millis() * 0.006f) * 0.5f + 0.5f);
     }
-    const uint16_t color = light.brightness <= 0.01f
-                               ? 0x4208
-                               : rgb888To565(light.color, light.brightness * pulse);
+    const bool assigned = light.brightness > 0.01f;
+    const uint16_t color =
+        assigned ? rgb888To565(light.color, light.brightness * pulse) : 0x4208;
     char title[12];
     snprintf(title, sizeof(title), "AGENT %d", i + 1);
-    const char* status = light.brightness <= 0.01f ? "UNASSIGNED" : light.effect.c_str();
+    const char* status = assigned ? light.effect.c_str() : "UNASSIGNED";
     const bool pressed = touchActive && activeAction.agent == i;
-    drawButton(x, y, 100, 80, title, color, pressed, status);
-    canvas.fillCircle(x + 88, y + 12, 4, color);
+    drawAgentButton(x, y, 100, 80, title, color, assigned, pressed, status);
   }
 }
 
