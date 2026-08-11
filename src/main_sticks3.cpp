@@ -25,6 +25,7 @@ constexpr uint16_t kSelectedPanel = 0x31A6;
 constexpr uint16_t kText = 0xFFFF;
 constexpr uint16_t kMuted = 0x9CF3;
 constexpr uint16_t kAccent = 0x2E73;
+constexpr uint16_t kSelectedIndicator = 0xF800;
 constexpr uint16_t kDisconnected = 0xF800;
 constexpr uint16_t kConnected = 0x07E0;
 constexpr uint16_t kFlashColor = 0xFFFF;
@@ -107,10 +108,10 @@ void drawScreen() {
     canvas.setTextColor(textColor);
     canvas.drawString(label, 22, top + rowHeight / 2);
 
-    canvas.setTextDatum(middle_right);
-    canvas.setTextColor(assigned ? textColor : kMuted);
-    canvas.drawString(selected ? ">" : "", width - 9,
-                      top + rowHeight / 2);
+    if (selected) {
+      canvas.fillCircle(width - 12, top + rowHeight / 2, 4,
+                        kSelectedIndicator);
+    }
   }
 
   canvas.fillRect(0, height - kFooterHeight, width, kFooterHeight, kBackground);
