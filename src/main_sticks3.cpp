@@ -7,6 +7,7 @@
 #include <cmath>
 
 #include "CodexMicroBle.h"
+#include "CoreAgentCardStyle.h"
 #include "StickS3AgentStatus.h"
 #include "StickS3ButtonController.h"
 #include "StickS3PowerController.h"
@@ -80,18 +81,22 @@ void drawScreen() {
     const int top = kHeaderHeight + i * rowHeight;
     const bool selected = i == buttons.selectedAgent();
     const ThreadLight& light = state.threads[i];
+    const bool assigned = light.brightness > 0.01f;
     float pulse = 1.0f;
     if (light.effect == "breath") {
       pulse = 0.55f +
               0.45f * (std::sin(millis() * 0.006f) * 0.5f + 0.5f);
     }
     const uint16_t statusColor =
-        light.brightness <= 0.01f
+        !assigned
             ? 0x4208
             : rgb888To565(light.color, light.brightness * pulse);
+    const uint16_t fill = codex_micro::agentCardFill(
+        statusColor, assigned, false, selected ? kSelectedPanel : kPanel);
+    const uint16_t textColor =
+        codex_micro::agentCardTextColor(fill, kText, kBackground);
 
-    canvas.fillRoundRect(3, top + 1, width - 6, rowHeight - 2, 4,
-                         selected ? kSelectedPanel : kPanel);
+    canvas.fillRoundRect(3, top + 1, width - 6, rowHeight - 2, 4, fill);
     canvas.drawRoundRect(3, top + 1, width - 6, rowHeight - 2, 4,
                          selected ? kAccent : statusColor);
     canvas.fillCircle(12, top + rowHeight / 2, 4, statusColor);
@@ -99,11 +104,11 @@ void drawScreen() {
     char label[12];
     snprintf(label, sizeof(label), "AGENT %d", i + 1);
     canvas.setTextDatum(middle_left);
-    canvas.setTextColor(kText);
+    canvas.setTextColor(textColor);
     canvas.drawString(label, 22, top + rowHeight / 2);
 
     canvas.setTextDatum(middle_right);
-    canvas.setTextColor(light.brightness <= 0.01f ? kMuted : statusColor);
+    canvas.setTextColor(assigned ? textColor : kMuted);
     canvas.drawString(selected ? ">" : "", width - 9,
                       top + rowHeight / 2);
   }
