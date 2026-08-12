@@ -38,6 +38,9 @@ constexpr int kFooterHeight = 26;
 constexpr int kAgentCount = 6;
 constexpr size_t kButtonSlotCount =
   static_cast<size_t>(codex_micro::StickS3ButtonSlot::Count);
+constexpr uint32_t kDefaultDimAfterSeconds = 60;
+constexpr uint32_t kDefaultPowerOffAfterSeconds = 30 * 60;
+constexpr uint32_t kMaximumPowerTimeoutSeconds = 7 * 24 * 60 * 60;
 
 const char* kAgentKeys[kAgentCount] = {"AG00", "AG01", "AG02",
                                       "AG03", "AG04", "AG05"};
@@ -46,6 +49,9 @@ const char* kButtonPreferenceKeys[kButtonSlotCount] = {
 const char* kDefaultButtonActions[kButtonSlotCount] = {
   "enter", "right_alt", "next", "previous", "activate"};
 constexpr char kButtonPreferencesNamespace[] = "stick-buttons";
+constexpr char kPowerPreferencesNamespace[] = "stick-power";
+constexpr char kDimAfterPreferenceKey[] = "dim_sec";
+constexpr char kPowerOffAfterPreferenceKey[] = "off_sec";
 
 CodexMicroBle codex;
 CodexMicroState state;
@@ -57,6 +63,10 @@ uint32_t lastDrawMs = 0;
 uint32_t lastBatteryMs = 0;
 String buttonActionTokens[kButtonSlotCount];
 String buttonConfigInput;
+uint32_t dimAfterSeconds = kDefaultDimAfterSeconds;
+uint32_t powerOffAfterSeconds = kDefaultPowerOffAfterSeconds;
+
+void handlePowerAction(codex_micro::StickS3PowerAction action);
 
 uint16_t rgb888To565(uint32_t color, float brightness = 1.0f) {
   brightness = constrain(brightness, 0.0f, 1.0f);
@@ -94,6 +104,37 @@ void loadButtonConfig() {
   }
 }
 
+void applyPowerConfig(uint32_t dimSeconds, uint32_t powerOffSeconds,
+                      uint32_t now) {
+  dimAfterSeconds = dimSeconds;
+  powerOffAfterSeconds = powerOffSeconds;
+  handlePowerAction(powerController.setTimeouts(dimSeconds * 1000U,
+                                                powerOffSeconds * 1000U, now));
+}
+
+void loadPowerConfig() {
+  Preferences preferences;
+  const bool opened = preferences.begin(kPowerPreferencesNamespace, true);
+  uint32_t dimSeconds =
+      opened ? preferences.getUInt(kDimAfterPreferenceKey,
+                                   kDefaultDimAfterSeconds)
+             : kDefaultDimAfterSeconds;
+  uint32_t powerOffSeconds =
+      opened ? preferences.getUInt(kPowerOffAfterPreferenceKey,
+                                   kDefaultPowerOffAfterSeconds)
+             : kDefaultPowerOffAfterSeconds;
+  if (opened) {
+    preferences.end();
+  }
+  if (dimSeconds > kMaximumPowerTimeoutSeconds) {
+    dimSeconds = kDefaultDimAfterSeconds;
+  }
+  if (powerOffSeconds > kMaximumPowerTimeoutSeconds) {
+    powerOffSeconds = kDefaultPowerOffAfterSeconds;
+  }
+  applyPowerConfig(dimSeconds, powerOffSeconds, 0);
+}
+
 bool saveButtonConfig(const String* tokens) {
   Preferences preferences;
   if (!preferences.begin(kButtonPreferencesNamespace, false)) {
@@ -110,6 +151,20 @@ bool saveButtonConfig(const String* tokens) {
   return saved;
 }
 
+bool savePowerConfig(uint32_t dimSeconds, uint32_t powerOffSeconds) {
+  Preferences preferences;
+  if (!preferences.begin(kPowerPreferencesNamespace, false)) {
+    return false;
+  }
+  const bool saved =
+      preferences.putUInt(kDimAfterPreferenceKey, dimSeconds) ==
+          sizeof(dimSeconds) &&
+      preferences.putUInt(kPowerOffAfterPreferenceKey, powerOffSeconds) ==
+          sizeof(powerOffSeconds);
+  preferences.end();
+  return saved;
+}
+
 void printButtonConfig() {
   Serial.print("BUTTONS CONFIG");
   for (size_t index = 0; index < kButtonSlotCount; ++index) {
@@ -117,6 +172,42 @@ void printButtonConfig() {
     Serial.print(buttonActionTokens[index]);
   }
   Serial.println();
+}
+
+void printPowerConfig() {
+  Serial.printf("POWER CONFIG %lu %lu\n",
+                static_cast<unsigned long>(dimAfterSeconds),
+                static_cast<unsigned long>(powerOffAfterSeconds));
+}
+
+bool parsePowerTimeout(const String& token, uint32_t& value) {
+  if (token.isEmpty()) {
+    return false;
+  }
+  uint32_t parsed = 0;
+  for (size_t index = 0; index < token.length(); ++index) {
+    const char character = token[index];
+    if (character < '0' || character > '9') {
+      return false;
+    }
+    parsed = parsed * 10U + static_cast<uint32_t>(character - '0');
+    if (parsed > kMaximumPowerTimeoutSeconds) {
+      return false;
+    }
+  }
+  value = parsed;
+  return true;
+}
+
+bool parsePowerConfigPayload(String payload, uint32_t& dimSeconds,
+                             uint32_t& powerOffSeconds) {
+  payload.trim();
+  const int separator = payload.indexOf(' ');
+  if (separator <= 0 || payload.indexOf(' ', separator + 1) >= 0) {
+    return false;
+  }
+  return parsePowerTimeout(payload.substring(0, separator), dimSeconds) &&
+         parsePowerTimeout(payload.substring(separator + 1), powerOffSeconds);
 }
 
 bool parseButtonConfigPayload(const String& payload, String* tokens) {
@@ -149,6 +240,42 @@ bool parseButtonConfigPayload(const String& payload, String* tokens) {
 
 void processButtonConfigCommand(String command) {
   command.trim();
+  if (command == "POWER GET" || command == "POWER PING") {
+    Serial.println("POWER READY 1");
+    printPowerConfig();
+    return;
+  }
+  if (command == "POWER RESET") {
+    if (!savePowerConfig(kDefaultDimAfterSeconds,
+                         kDefaultPowerOffAfterSeconds)) {
+      Serial.println("POWER ERROR save-failed");
+      return;
+    }
+    applyPowerConfig(kDefaultDimAfterSeconds, kDefaultPowerOffAfterSeconds,
+                     millis());
+    Serial.println("POWER OK");
+    printPowerConfig();
+    return;
+  }
+  constexpr char kPowerSetPrefix[] = "POWER SET ";
+  if (command.startsWith(kPowerSetPrefix)) {
+    uint32_t dimSeconds = 0;
+    uint32_t powerOffSeconds = 0;
+    if (!parsePowerConfigPayload(
+            command.substring(strlen(kPowerSetPrefix)), dimSeconds,
+            powerOffSeconds)) {
+      Serial.println("POWER ERROR invalid-config");
+      return;
+    }
+    if (!savePowerConfig(dimSeconds, powerOffSeconds)) {
+      Serial.println("POWER ERROR save-failed");
+      return;
+    }
+    applyPowerConfig(dimSeconds, powerOffSeconds, millis());
+    Serial.println("POWER OK");
+    printPowerConfig();
+    return;
+  }
   if (command == "BUTTONS GET" || command == "BUTTONS PING") {
     Serial.println("BUTTONS READY 1");
     printButtonConfig();
@@ -191,6 +318,8 @@ void processButtonConfigCommand(String command) {
   }
   if (command.startsWith("BUTTONS ")) {
     Serial.println("BUTTONS ERROR unknown-command");
+  } else if (command.startsWith("POWER ")) {
+    Serial.println("POWER ERROR unknown-command");
   }
 }
 
@@ -363,6 +492,7 @@ void setup() {
   delay(600);
   Serial.println("Codex Micro StickS3 boot");
   loadButtonConfig();
+  loadPowerConfig();
 
   auto config = M5.config();
   config.clear_display = true;
@@ -392,6 +522,8 @@ void setup() {
   Serial.println("CODEX_MICRO_READY");
   Serial.println("BUTTONS READY 1");
   printButtonConfig();
+  Serial.println("POWER READY 1");
+  printPowerConfig();
 }
 
 void loop() {

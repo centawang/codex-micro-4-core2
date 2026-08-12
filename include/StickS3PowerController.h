@@ -22,6 +22,16 @@ class StickS3PowerController {
                                   uint32_t powerOffAfterMs = 30U * 60U * 1000U)
       : dimAfterMs_(dimAfterMs), powerOffAfterMs_(powerOffAfterMs) {}
 
+  StickS3PowerAction setTimeouts(uint32_t dimAfterMs,
+                                 uint32_t powerOffAfterMs, uint32_t now) {
+    const bool restoreDisplay = initialized_ && dimmed_;
+    dimAfterMs_ = dimAfterMs;
+    powerOffAfterMs_ = powerOffAfterMs;
+    begin(now);
+    return restoreDisplay ? StickS3PowerAction::RestoreDisplay
+                          : StickS3PowerAction::None;
+  }
+
   void begin(uint32_t now) {
     lastActivityMs_ = now;
     dimmed_ = false;
@@ -51,11 +61,12 @@ class StickS3PowerController {
     }
 
     const uint32_t inactiveMs = now - lastActivityMs_;
-    if (!powerOffRequested_ && inactiveMs >= powerOffAfterMs_) {
+    if (powerOffAfterMs_ != 0 && !powerOffRequested_ &&
+        inactiveMs >= powerOffAfterMs_) {
       powerOffRequested_ = true;
       return StickS3PowerAction::PowerOff;
     }
-    if (!dimmed_ && inactiveMs >= dimAfterMs_) {
+    if (dimAfterMs_ != 0 && !dimmed_ && inactiveMs >= dimAfterMs_) {
       dimmed_ = true;
       return StickS3PowerAction::DimDisplay;
     }

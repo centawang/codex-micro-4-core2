@@ -93,9 +93,11 @@ Open [tools/sticks3-button-configurator.html](tools/sticks3-button-configurator.
 directly in Microsoft Edge or Google Chrome, connect the StickS3 USB serial
 port, and assign actions to the `BtnA` single/double clicks and the `BtnB`
 single/double/hold gestures. The page supports Agent navigation, Codex commands,
-common keyboard actions, and custom HID shortcuts. Written settings are stored
-in the StickS3 NVS and remain active after power-off; **Restore defaults** returns
-to Enter, Right Alt, next Agent, previous Agent, and activate selected Agent.
+common keyboard actions, custom HID shortcuts, screen-dim timing, and automatic
+power-off timing. Use `0` to disable either power timeout. Written settings are
+stored in the StickS3 NVS and remain active after power-off; **Restore defaults**
+returns to Enter, Right Alt, next Agent, previous Agent, activate selected Agent,
+one-minute dimming, and 30-minute power-off.
 
 CoreS3 exposes the serial monitor over native USB CDC, so the port disappears
 and re-enumerates on every reset.

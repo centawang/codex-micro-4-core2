@@ -88,8 +88,10 @@ pio test -e native
 [tools/sticks3-button-configurator.html](tools/sticks3-button-configurator.html)，
 连接 StickS3 的 USB 串口，即可配置 `BtnA` 的单击/双击和 `BtnB` 的
 单击/双击/长按。页面支持 Agent 导航、Codex 命令、常用键盘动作和自定义 HID
-快捷键。写入的设置保存在 StickS3 NVS 中，断电后仍然有效；点击“恢复默认”会
-恢复为 Enter、Right Alt、下一个 Agent、上一个 Agent 和打开选中 Agent。
+快捷键，也可设置屏幕变暗和自动关机时间；填写 `0` 可禁用对应超时。写入的
+设置保存在 StickS3 NVS 中，断电后仍然有效；点击“恢复默认”会恢复为 Enter、
+Right Alt、下一个 Agent、上一个 Agent、打开选中 Agent、1 分钟变暗和 30 分钟
+自动关机。
 
 CoreS3 通过原生 USB CDC 提供串口，因此每次复位串口都会断开并重新枚举。
 

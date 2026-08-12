@@ -489,6 +489,25 @@ void testFirstPowerUpdateInitializesActivityTimer() {
   expectPowerAction(power.update(65000), StickS3PowerAction::DimDisplay);
 }
 
+void testPowerTimeoutsCanBeDisabled() {
+  StickS3PowerController power(0, 0);
+  power.begin(0);
+
+  expectPowerAction(power.update(UINT32_MAX), StickS3PowerAction::None);
+}
+
+void testChangingPowerTimeoutsRestoresDisplayAndRestartsTimer() {
+  StickS3PowerController power;
+  power.begin(0);
+  expectPowerAction(power.update(60000), StickS3PowerAction::DimDisplay);
+
+  expectPowerAction(power.setTimeouts(120000, 600000, 70000),
+                    StickS3PowerAction::RestoreDisplay);
+  expectPowerAction(power.update(189999), StickS3PowerAction::None);
+  expectPowerAction(power.update(190000), StickS3PowerAction::DimDisplay);
+  expectPowerAction(power.update(670000), StickS3PowerAction::PowerOff);
+}
+
 }  // namespace
 
 void setUp() {}
@@ -531,5 +550,7 @@ int main(int, char**) {
   RUN_TEST(testLatePowerPollSkipsDimAndPowersOffImmediately);
   RUN_TEST(testPowerTimeoutsSurviveMillisRollover);
   RUN_TEST(testFirstPowerUpdateInitializesActivityTimer);
+  RUN_TEST(testPowerTimeoutsCanBeDisabled);
+  RUN_TEST(testChangingPowerTimeoutsRestoresDisplayAndRestartsTimer);
   return UNITY_END();
 }

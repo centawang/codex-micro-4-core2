@@ -205,6 +205,16 @@ Supported tokens are `none`, `enter`, `right_alt`, `ctrl_shift_d`, `next`,
 Mappings are stored in the `stick-buttons` NVS namespace and loaded before the
 BLE service starts.
 
+Power timing uses a parallel protocol:
+
+- `POWER GET` returns `POWER CONFIG <dim-seconds> <power-off-seconds>`.
+- `POWER SET <dim-seconds> <power-off-seconds>` saves and applies both values.
+- `POWER RESET` restores 60-second dimming and 1800-second power-off.
+
+Each timeout accepts `0` (disabled) through 604800 seconds (seven days).
+Settings are stored in the `stick-power` NVS namespace. Applying new values
+restarts the inactivity timer and restores the display if it was dimmed.
+
 Touch hit areas are fixed for the 320 x 240 landscape orientation. Press and
 release events are sent for Agent Keys, Command Keys, directional controls, and
 the dial press. Dial rotation controls send one encoder-step action immediately.

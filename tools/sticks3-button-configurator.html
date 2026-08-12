@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="通过 USB 配置 Stick S3 的 BtnA 和 BtnB 手势映射。">
-  <title>Stick S3 按键配置</title>
+  <meta name="description" content="通过 USB 配置 Stick S3 的按键映射与自动休眠。">
+  <title>Stick S3 配置</title>
   <script>
     (() => {
       const param = new URLSearchParams(window.location.search).get("scoutTheme");
@@ -505,6 +505,28 @@
       padding: 8px 36px 8px 12px;
     }
 
+    input[type="number"] {
+      width: 100%;
+      min-height: 40px;
+      border: 1px solid var(--cp-border-strong);
+      border-radius: 0.625rem;
+      background: var(--cp-surface);
+      color: var(--cp-text);
+      padding: 8px 12px;
+    }
+
+    .duration-control {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 48px;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .duration-unit {
+      color: var(--cp-text-muted);
+      font-size: 0.82rem;
+    }
+
     .custom-shortcut {
       display: grid;
       gap: 12px;
@@ -649,7 +671,7 @@
   <main class="app-shell">
     <header class="app-header">
       <div class="title-block">
-        <h1>Stick S3 按键配置</h1>
+        <h1>Stick S3 配置</h1>
         <p class="subtitle">Codex Micro · USB</p>
       </div>
       <div class="connection-cluster">
@@ -698,7 +720,7 @@
 
       <section class="config-panel" aria-labelledby="configHeading">
         <div class="config-header">
-          <h2 id="configHeading">按键映射</h2>
+          <h2 id="configHeading">按键与休眠</h2>
           <div class="config-actions">
             <button id="readButton" type="button" disabled>读取设备</button>
             <button id="resetButton" class="danger-button" type="button" disabled>恢复默认</button>
@@ -714,6 +736,30 @@
         <div id="groupB" class="button-group">
           <div class="group-title"><span class="group-badge">B</span>BtnB</div>
           <div id="rowsB"></div>
+        </div>
+
+        <div id="groupPower" class="button-group">
+          <div class="group-title"><span class="group-badge">P</span>电源与休眠</div>
+          <div class="mapping-row">
+            <div class="mapping-label">
+              <strong>屏幕变暗</strong>
+              <span>0 表示永不变暗</span>
+            </div>
+            <div class="mapping-control duration-control">
+              <input id="dimAfterMinutes" type="number" min="0" max="10080" step="0.25" value="1" inputmode="decimal" aria-label="屏幕变暗等待分钟数">
+              <span class="duration-unit">分钟</span>
+            </div>
+          </div>
+          <div class="mapping-row">
+            <div class="mapping-label">
+              <strong>自动关机</strong>
+              <span>0 表示永不自动关机</span>
+            </div>
+            <div class="mapping-control duration-control">
+              <input id="powerOffAfterMinutes" type="number" min="0" max="10080" step="0.25" value="30" inputmode="decimal" aria-label="自动关机等待分钟数">
+              <span class="duration-unit">分钟</span>
+            </div>
+          </div>
         </div>
 
         <details>
@@ -788,7 +834,8 @@
       let readLoopPromise = null;
       let incoming = "";
       let connected = false;
-      let receivedConfig = false;
+      let receivedButtonConfig = false;
+      let receivedPowerConfig = false;
       let dirty = false;
       let disconnecting = false;
 
@@ -800,6 +847,8 @@
       const connectionLabel = document.getElementById("connectionLabel");
       const statusBar = document.getElementById("statusBar");
       const serialLog = document.getElementById("serialLog");
+      const dimAfterMinutes = document.getElementById("dimAfterMinutes");
+      const powerOffAfterMinutes = document.getElementById("powerOffAfterMinutes");
 
       function actionLabel(token) {
         const known = ACTIONS.find((action) => action.value === token);
@@ -990,6 +1039,17 @@
         return tokens;
       }
 
+      function collectPowerTimeouts() {
+        const dimMinutes = Number(dimAfterMinutes.value);
+        const powerOffMinutes = Number(powerOffAfterMinutes.value);
+        if (!Number.isFinite(dimMinutes) || !Number.isFinite(powerOffMinutes) ||
+            dimMinutes < 0 || powerOffMinutes < 0 ||
+            dimMinutes > 10080 || powerOffMinutes > 10080) {
+          return null;
+        }
+        return [Math.round(dimMinutes * 60), Math.round(powerOffMinutes * 60)];
+      }
+
       async function sendCommand(command) {
         if (!writer || !connected) {
           setStatus("设备未连接。", "error");
@@ -1002,10 +1062,27 @@
       function applyDeviceConfig(tokens) {
         if (tokens.length !== SLOTS.length) return;
         tokens.forEach((token, index) => setRowToken(rows.get(SLOTS[index].id), token, false));
-        dirty = false;
-        receivedConfig = true;
+        receivedButtonConfig = true;
         updatePreview();
-        setStatus("配置已与 Stick S3 同步。", "success");
+        updateSynchronizedStatus();
+      }
+
+      function formatMinutes(seconds) {
+        return String(Math.round((seconds / 60) * 100) / 100);
+      }
+
+      function applyPowerConfig(dimSeconds, powerOffSeconds) {
+        dimAfterMinutes.value = formatMinutes(dimSeconds);
+        powerOffAfterMinutes.value = formatMinutes(powerOffSeconds);
+        receivedPowerConfig = true;
+        updateSynchronizedStatus();
+      }
+
+      function updateSynchronizedStatus() {
+        if (receivedButtonConfig && receivedPowerConfig) {
+          dirty = false;
+          setStatus("按键与休眠配置已与 Stick S3 同步。", "success");
+        }
       }
 
       function handleSerialLine(line) {
@@ -1013,15 +1090,24 @@
         if (!clean) return;
         log(clean, "<<");
         const parts = clean.split(/\s+/);
-        if (parts[0] !== "BUTTONS") return;
-        if (parts[1] === "READY") {
+        if (parts[0] === "BUTTONS" && parts[1] === "READY") {
           setStatus("设备已连接，正在读取配置。", "success");
-        } else if (parts[1] === "CONFIG" && parts.length === 7) {
+        } else if (parts[0] === "BUTTONS" && parts[1] === "CONFIG" && parts.length === 7) {
           applyDeviceConfig(parts.slice(2));
-        } else if (parts[1] === "OK") {
-          setStatus("配置已写入设备。", "success");
-        } else if (parts[1] === "ERROR") {
+        } else if (parts[0] === "BUTTONS" && parts[1] === "OK") {
+          setStatus("按键配置已写入设备，等待确认。", "success");
+        } else if (parts[0] === "BUTTONS" && parts[1] === "ERROR") {
           setStatus(`设备拒绝配置：${parts.slice(2).join(" ")}`, "error");
+        } else if (parts[0] === "POWER" && parts[1] === "CONFIG" && parts.length === 4) {
+          const dimSeconds = Number(parts[2]);
+          const powerOffSeconds = Number(parts[3]);
+          if (Number.isInteger(dimSeconds) && Number.isInteger(powerOffSeconds)) {
+            applyPowerConfig(dimSeconds, powerOffSeconds);
+          }
+        } else if (parts[0] === "POWER" && parts[1] === "OK") {
+          setStatus("休眠配置已写入设备，等待确认。", "success");
+        } else if (parts[0] === "POWER" && parts[1] === "ERROR") {
+          setStatus(`设备拒绝休眠配置：${parts.slice(2).join(" ")}`, "error");
         }
       }
 
@@ -1065,16 +1151,20 @@
           await port.open({ baudRate: 115200 });
           writer = port.writable.getWriter();
           disconnecting = false;
-          receivedConfig = false;
+          receivedButtonConfig = false;
+          receivedPowerConfig = false;
           updateConnectionUi("connected", "已连接");
           setStatus("正在读取 Stick S3 配置。", "success");
           log("Serial connected");
           readLoopPromise = readLoop();
           window.setTimeout(() => {
-            if (connected) sendCommand("BUTTONS GET");
+            if (connected) {
+              sendCommand("BUTTONS GET");
+              sendCommand("POWER GET");
+            }
           }, 500);
           window.setTimeout(() => {
-            if (connected && !receivedConfig) {
+            if (connected && (!receivedButtonConfig || !receivedPowerConfig)) {
               setStatus("未收到配置响应，请确认设备已烧录可配置固件。", "warning");
             }
           }, 2200);
@@ -1109,16 +1199,37 @@
       }
 
       connectButton.addEventListener("click", () => connected ? disconnect() : connect());
-      readButton.addEventListener("click", () => sendCommand("BUTTONS GET"));
-      resetButton.addEventListener("click", () => sendCommand("BUTTONS RESET"));
+      readButton.addEventListener("click", () => {
+        receivedButtonConfig = false;
+        receivedPowerConfig = false;
+        sendCommand("BUTTONS GET");
+        sendCommand("POWER GET");
+      });
+      resetButton.addEventListener("click", () => {
+        receivedButtonConfig = false;
+        receivedPowerConfig = false;
+        sendCommand("BUTTONS RESET");
+        sendCommand("POWER RESET");
+      });
       saveButton.addEventListener("click", async () => {
         const tokens = collectTokens();
         if (!tokens) {
           setStatus("自定义快捷键至少需要一个修饰键或主键。", "error");
           return;
         }
+        const powerTimeouts = collectPowerTimeouts();
+        if (!powerTimeouts) {
+          setStatus("休眠时间必须是 0 到 10080 分钟之间的数字。", "error");
+          return;
+        }
+        receivedButtonConfig = false;
+        receivedPowerConfig = false;
         await sendCommand(`BUTTONS SET ${tokens.join(" ")}`);
+        await sendCommand(`POWER SET ${powerTimeouts.join(" ")}`);
       });
+
+      dimAfterMinutes.addEventListener("input", markDirty);
+      powerOffAfterMinutes.addEventListener("input", markDirty);
 
       document.querySelectorAll("[data-focus-group]").forEach((button) => {
         button.addEventListener("click", () => {

@@ -190,6 +190,16 @@ StickS3 入口没有触摸页面，而是以竖向列表显示全部 6 个 Agent
 `previous`、`activate`、`key:<modifier>:<usage>` 和 `codex:<ACT key>`。
 映射保存在 `stick-buttons` NVS 命名空间中，并在 BLE 服务启动前加载。
 
+电源时间使用一组并行协议：
+
+- `POWER GET` 返回 `POWER CONFIG <dim-seconds> <power-off-seconds>`。
+- `POWER SET <dim-seconds> <power-off-seconds>` 保存并应用两个时间。
+- `POWER RESET` 恢复为 60 秒后变暗、1800 秒后关机。
+
+每个超时可设置为 `0`（禁用）到 604800 秒（7 天）。设置保存在
+`stick-power` NVS 命名空间中。应用新时间会重新开始空闲计时；若屏幕已经变暗，
+则立即恢复正常亮度。
+
 触摸命中区域按 320 x 240 横屏方向固定。Agent Key、Command Key、方向控件和
 旋钮按下都会发送按下与释放事件。旋钮旋转控件在触摸时立即发送一次步进动作。
 
