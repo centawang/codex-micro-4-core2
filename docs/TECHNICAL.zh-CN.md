@@ -173,10 +173,22 @@ Agent ID 为 `AG00` 至 `AG05`。默认 Command ID 为 `ACT06`、`ACT07`、
 CoreS3 的触摸面板只覆盖 320 x 240 屏幕区域，M5Unified 不会上报这三个按钮，
 因此只能使用底部标签栏切换页面。
 
-StickS3 入口没有触摸页面，而是以竖向列表显示全部 6 个 Agent 状态。单击
-`BtnB` 向后移动高亮项，在 350 ms 内双击向前移动，长按 500 ms 为当前高亮
-Agent ID 发送正常的按下/释放事件。单击 `BtnA` 通过标准键盘报告发送回车，
-双击则发送右 Alt。
+StickS3 入口没有触摸页面，而是以竖向列表显示全部 6 个 Agent 状态。默认映射
+为：单击 `BtnB` 向后移动高亮项，在 350 ms 内双击向前移动，长按 500 ms
+打开当前高亮 Agent；单击 `BtnA` 发送回车，双击发送右 Alt。所有手势都可在
+运行时重新映射。
+
+独立配置页通过 115200 波特率的 USB CDC 通信。命令和响应按行分隔，并统一以
+`BUTTONS` 开头：
+
+- `BUTTONS GET` 返回当前五个动作 token。
+- `BUTTONS SET <a-single> <a-double> <b-single> <b-double> <b-hold>` 会先验证
+   全部映射，保存成功后再应用。
+- `BUTTONS RESET` 恢复默认映射。
+
+支持的 token 包括 `none`、`enter`、`right_alt`、`ctrl_shift_d`、`next`、
+`previous`、`activate`、`key:<modifier>:<usage>` 和 `codex:<ACT key>`。
+映射保存在 `stick-buttons` NVS 命名空间中，并在 BLE 服务启动前加载。
 
 触摸命中区域按 320 x 240 横屏方向固定。Agent Key、Command Key、方向控件和
 旋钮按下都会发送按下与释放事件。旋钮旋转控件在触摸时立即发送一次步进动作。
@@ -184,8 +196,8 @@ Agent ID 发送正常的按下/释放事件。单击 `BtnA` 通过标准键盘�
 Core2/CoreS3 触摸界面本地不计算双击间隔，也不判断打开设置所需的 500 ms
 按住时间，而是由 ChatGPT 桌面端解释按下和释放序列。StickS3 入口会在本地
 处理实体按键手势。
-`StickS3ButtonController` 不依赖 Arduino，单击、双击、长按、Agent 环绕和
-`millis()` 回绕行为由 native Unity 单元测试覆盖。
+`StickS3ButtonController` 不依赖 Arduino，手势边界、重映射、Agent 环绕、
+token 验证和 `millis()` 回绕行为由 native Unity 单元测试覆盖。
 
 ## 屏幕渲染流程
 

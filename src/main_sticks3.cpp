@@ -3,12 +3,14 @@
 
 #include <Arduino.h>
 #include <M5Unified.h>
+#include <Preferences.h>
 
 #include <cmath>
 
 #include "CodexMicroBle.h"
 #include "CoreAgentCardStyle.h"
 #include "StickS3AgentStatus.h"
+#include "StickS3ButtonConfig.h"
 #include "StickS3ButtonController.h"
 #include "StickS3PowerController.h"
 #include "StickS3ScreenFlash.h"
@@ -34,9 +36,16 @@ constexpr uint8_t kDimBrightness = 20;
 constexpr int kHeaderHeight = 28;
 constexpr int kFooterHeight = 26;
 constexpr int kAgentCount = 6;
+constexpr size_t kButtonSlotCount =
+  static_cast<size_t>(codex_micro::StickS3ButtonSlot::Count);
 
 const char* kAgentKeys[kAgentCount] = {"AG00", "AG01", "AG02",
                                       "AG03", "AG04", "AG05"};
+const char* kButtonPreferenceKeys[kButtonSlotCount] = {
+  "a_single", "a_double", "b_single", "b_double", "b_hold"};
+const char* kDefaultButtonActions[kButtonSlotCount] = {
+  "enter", "right_alt", "next", "previous", "activate"};
+constexpr char kButtonPreferencesNamespace[] = "stick-buttons";
 
 CodexMicroBle codex;
 CodexMicroState state;
@@ -46,6 +55,8 @@ codex_micro::StickS3PowerController powerController;
 codex_micro::StickS3ScreenFlash screenFlash;
 uint32_t lastDrawMs = 0;
 uint32_t lastBatteryMs = 0;
+String buttonActionTokens[kButtonSlotCount];
+String buttonConfigInput;
 
 uint16_t rgb888To565(uint32_t color, float brightness = 1.0f) {
   brightness = constrain(brightness, 0.0f, 1.0f);
@@ -53,6 +64,155 @@ uint16_t rgb888To565(uint32_t color, float brightness = 1.0f) {
   const uint8_t green = ((color >> 8) & 0xFF) * brightness;
   const uint8_t blue = (color & 0xFF) * brightness;
   return canvas.color565(red, green, blue);
+}
+
+void applyButtonActionToken(size_t index, const String& token) {
+  codex_micro::StickS3ButtonAction action;
+  if (!codex_micro::parseStickS3ButtonAction(token.c_str(), action)) {
+    return;
+  }
+  buttonActionTokens[index] = token;
+  buttons.setAction(static_cast<codex_micro::StickS3ButtonSlot>(index), action);
+}
+
+void loadButtonConfig() {
+  Preferences preferences;
+  const bool opened = preferences.begin(kButtonPreferencesNamespace, true);
+  for (size_t index = 0; index < kButtonSlotCount; ++index) {
+    String token = opened
+                       ? preferences.getString(kButtonPreferenceKeys[index],
+                                               kDefaultButtonActions[index])
+                       : String(kDefaultButtonActions[index]);
+    codex_micro::StickS3ButtonAction action;
+    if (!codex_micro::parseStickS3ButtonAction(token.c_str(), action)) {
+      token = kDefaultButtonActions[index];
+    }
+    applyButtonActionToken(index, token);
+  }
+  if (opened) {
+    preferences.end();
+  }
+}
+
+bool saveButtonConfig(const String* tokens) {
+  Preferences preferences;
+  if (!preferences.begin(kButtonPreferencesNamespace, false)) {
+    return false;
+  }
+  bool saved = true;
+  for (size_t index = 0; index < kButtonSlotCount; ++index) {
+    if (preferences.putString(kButtonPreferenceKeys[index], tokens[index]) ==
+        0) {
+      saved = false;
+    }
+  }
+  preferences.end();
+  return saved;
+}
+
+void printButtonConfig() {
+  Serial.print("BUTTONS CONFIG");
+  for (size_t index = 0; index < kButtonSlotCount; ++index) {
+    Serial.print(' ');
+    Serial.print(buttonActionTokens[index]);
+  }
+  Serial.println();
+}
+
+bool parseButtonConfigPayload(const String& payload, String* tokens) {
+  int cursor = 0;
+  for (size_t index = 0; index < kButtonSlotCount; ++index) {
+    while (cursor < static_cast<int>(payload.length()) &&
+           payload[cursor] == ' ') {
+      ++cursor;
+    }
+    if (cursor >= static_cast<int>(payload.length())) {
+      return false;
+    }
+    int end = payload.indexOf(' ', cursor);
+    if (end < 0) {
+      end = payload.length();
+    }
+    tokens[index] = payload.substring(cursor, end);
+    codex_micro::StickS3ButtonAction action;
+    if (!codex_micro::parseStickS3ButtonAction(tokens[index].c_str(), action)) {
+      return false;
+    }
+    cursor = end;
+  }
+  while (cursor < static_cast<int>(payload.length()) &&
+         payload[cursor] == ' ') {
+    ++cursor;
+  }
+  return cursor == static_cast<int>(payload.length());
+}
+
+void processButtonConfigCommand(String command) {
+  command.trim();
+  if (command == "BUTTONS GET" || command == "BUTTONS PING") {
+    Serial.println("BUTTONS READY 1");
+    printButtonConfig();
+    return;
+  }
+  if (command == "BUTTONS RESET") {
+    String tokens[kButtonSlotCount];
+    for (size_t index = 0; index < kButtonSlotCount; ++index) {
+      tokens[index] = kDefaultButtonActions[index];
+    }
+    if (!saveButtonConfig(tokens)) {
+      Serial.println("BUTTONS ERROR save-failed");
+      return;
+    }
+    for (size_t index = 0; index < kButtonSlotCount; ++index) {
+      applyButtonActionToken(index, tokens[index]);
+    }
+    Serial.println("BUTTONS OK");
+    printButtonConfig();
+    return;
+  }
+  constexpr char kSetPrefix[] = "BUTTONS SET ";
+  if (command.startsWith(kSetPrefix)) {
+    String tokens[kButtonSlotCount];
+    if (!parseButtonConfigPayload(command.substring(strlen(kSetPrefix)),
+                                  tokens)) {
+      Serial.println("BUTTONS ERROR invalid-config");
+      return;
+    }
+    if (!saveButtonConfig(tokens)) {
+      Serial.println("BUTTONS ERROR save-failed");
+      return;
+    }
+    for (size_t index = 0; index < kButtonSlotCount; ++index) {
+      applyButtonActionToken(index, tokens[index]);
+    }
+    Serial.println("BUTTONS OK");
+    printButtonConfig();
+    return;
+  }
+  if (command.startsWith("BUTTONS ")) {
+    Serial.println("BUTTONS ERROR unknown-command");
+  }
+}
+
+void pollButtonConfigSerial() {
+  while (Serial.available() > 0) {
+    const int value = Serial.read();
+    if (value < 0) {
+      return;
+    }
+    const char character = static_cast<char>(value);
+    if (character == '\n') {
+      processButtonConfigCommand(buttonConfigInput);
+      buttonConfigInput.clear();
+    } else if (character != '\r' && character >= 0x20 && character <= 0x7E) {
+      if (buttonConfigInput.length() < 240) {
+        buttonConfigInput += character;
+      } else {
+        buttonConfigInput.clear();
+        Serial.println("BUTTONS ERROR command-too-long");
+      }
+    }
+  }
 }
 
 void drawScreen() {
@@ -144,7 +304,7 @@ bool hasBreathingAgent() {
 }
 
 void handleButtonAction(codex_micro::StickS3ButtonAction action) {
-  switch (action) {
+  switch (action.kind) {
     case codex_micro::StickS3ButtonAction::SelectionChanged:
       drawScreen();
       break;
@@ -161,6 +321,19 @@ void handleButtonAction(codex_micro::StickS3ButtonAction action) {
     case codex_micro::StickS3ButtonAction::SendRightAlt:
       codex.sendRightAlt();
       break;
+    case codex_micro::StickS3ButtonAction::KeyboardShortcut:
+      codex.sendKeyboardShortcut(action.modifier, action.key);
+      break;
+    case codex_micro::StickS3ButtonAction::CodexCommand: {
+      const char* key =
+          codex_micro::stickS3CodexCommandKey(action.commandIndex);
+      if (key != nullptr) {
+        codex.sendKey(key, 1);
+        delay(8);
+        codex.sendKey(key, 0);
+      }
+      break;
+    }
     case codex_micro::StickS3ButtonAction::None:
       break;
   }
@@ -189,6 +362,7 @@ void setup() {
   Serial.begin(115200);
   delay(600);
   Serial.println("Codex Micro StickS3 boot");
+  loadButtonConfig();
 
   auto config = M5.config();
   config.clear_display = true;
@@ -216,11 +390,14 @@ void setup() {
   updateBattery();
   drawScreen();
   Serial.println("CODEX_MICRO_READY");
+  Serial.println("BUTTONS READY 1");
+  printButtonConfig();
 }
 
 void loop() {
   M5.update();
   codex.poll();
+  pollButtonConfigSerial();
 
   const uint32_t inputNow = millis();
   if (M5.BtnA.wasPressed() || M5.BtnB.wasPressed()) {

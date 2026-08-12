@@ -187,10 +187,23 @@ and from Core2's A, B, and C touch buttons. CoreS3's digitizer covers only the
 is the only page control.
 
 The StickS3 entry point has no touch pages. It renders all six Agent states as
-a vertical list. A single `BtnB` click advances the highlight, a double-click
-within 350 ms moves it back, and a 500 ms hold emits the normal press/release
-pair for the highlighted Agent ID. A single `BtnA` click emits Enter, while a
-double-click emits Right Alt through the separate standard keyboard report.
+a vertical list. Its default mappings advance the highlight with a single
+`BtnB` click, move it back with a double-click within 350 ms, activate the
+highlighted Agent after a 500 ms hold, emit Enter for a single `BtnA` click,
+and emit Right Alt for a double-click. Each gesture can be remapped at runtime.
+
+The standalone configurator communicates over USB CDC at 115200 baud. Commands
+and responses are newline-delimited and prefixed with `BUTTONS`:
+
+- `BUTTONS GET` returns the five current action tokens.
+- `BUTTONS SET <a-single> <a-double> <b-single> <b-double> <b-hold>` validates,
+   saves, and then applies all mappings.
+- `BUTTONS RESET` restores the default mappings.
+
+Supported tokens are `none`, `enter`, `right_alt`, `ctrl_shift_d`, `next`,
+`previous`, `activate`, `key:<modifier>:<usage>`, and `codex:<ACT key>`.
+Mappings are stored in the `stick-buttons` NVS namespace and loaded before the
+BLE service starts.
 
 Touch hit areas are fixed for the 320 x 240 landscape orientation. Press and
 release events are sent for Agent Keys, Command Keys, directional controls, and
@@ -199,9 +212,10 @@ the dial press. Dial rotation controls send one encoder-step action immediately.
 The Core2/CoreS3 touch UI does not implement double-click timing or the 500 ms
 settings hold locally; ChatGPT Desktop interprets those press/release sequences.
 The StickS3 entry point handles its physical-button gestures locally.
-`StickS3ButtonController` contains this timing and selection state without any
-Arduino dependencies, so its single-click, double-click, hold, wraparound, and
-`millis()` rollover behavior is covered by native Unity tests.
+`StickS3ButtonController` contains timing, configured actions, and selection
+state without Arduino dependencies, so gesture boundaries, remapping,
+wraparound, token validation, and `millis()` rollover behavior are covered by
+native Unity tests.
 
 ## Display pipeline
 

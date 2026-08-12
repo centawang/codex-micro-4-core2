@@ -82,6 +82,15 @@ CODEX_MICRO_READY
 pio test -e native
 ```
 
+### 配置 StickS3 按键
+
+使用 Microsoft Edge 或 Google Chrome 直接打开
+[tools/sticks3-button-configurator.html](tools/sticks3-button-configurator.html)，
+连接 StickS3 的 USB 串口，即可配置 `BtnA` 的单击/双击和 `BtnB` 的
+单击/双击/长按。页面支持 Agent 导航、Codex 命令、常用键盘动作和自定义 HID
+快捷键。写入的设置保存在 StickS3 NVS 中，断电后仍然有效；点击“恢复默认”会
+恢复为 Enter、Right Alt、下一个 Agent、上一个 Agent 和打开选中 Agent。
+
 CoreS3 通过原生 USB CDC 提供串口，因此每次复位串口都会断开并重新枚举。
 
 常规应用固件位于：

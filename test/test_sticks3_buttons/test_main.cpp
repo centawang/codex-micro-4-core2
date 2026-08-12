@@ -35,8 +35,8 @@ struct FakeAgentStatuses {
 };
 
 void expectAction(StickS3ButtonAction actual, StickS3ButtonAction expected) {
-  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(expected),
-                          static_cast<uint8_t>(actual));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(expected.kind),
+                          static_cast<uint8_t>(actual.kind));
 }
 
 void expectPowerAction(StickS3PowerAction actual,
@@ -179,6 +179,51 @@ void testButtonATimersSurviveMillisRollover() {
   expectAction(doubleClick.onButtonAReleased(249),
                StickS3ButtonAction::SendRightAlt);
   expectAction(doubleClick.pollButtonA(1000), StickS3ButtonAction::None);
+}
+
+void testButtonGesturesCanBeRemapped() {
+  StickS3ButtonController buttons;
+  buttons.setAction(codex_micro::StickS3ButtonSlot::ButtonASingle,
+                    codex_micro::makeStickS3SelectionAction(1));
+  buttons.setAction(codex_micro::StickS3ButtonSlot::ButtonBHold,
+                    codex_micro::makeStickS3KeyboardAction(0x03, 0x07));
+
+  buttons.onButtonAReleased(100);
+  expectAction(buttons.pollButtonA(451),
+               StickS3ButtonAction::SelectionChanged);
+  TEST_ASSERT_EQUAL_UINT8(1, buttons.selectedAgent());
+
+  const StickS3ButtonAction shortcut = buttons.onButtonBHold();
+  expectAction(shortcut, StickS3ButtonAction::KeyboardShortcut);
+  TEST_ASSERT_EQUAL_HEX8(0x03, shortcut.modifier);
+  TEST_ASSERT_EQUAL_HEX8(0x07, shortcut.key);
+}
+
+void testButtonActionTokensAreValidated() {
+  StickS3ButtonAction action;
+
+  TEST_ASSERT_TRUE(codex_micro::parseStickS3ButtonAction("enter", action));
+  expectAction(action, StickS3ButtonAction::SendEnter);
+
+  TEST_ASSERT_TRUE(
+      codex_micro::parseStickS3ButtonAction("key:3:7", action));
+  expectAction(action, StickS3ButtonAction::KeyboardShortcut);
+  TEST_ASSERT_EQUAL_HEX8(0x03, action.modifier);
+  TEST_ASSERT_EQUAL_HEX8(0x07, action.key);
+
+  TEST_ASSERT_TRUE(
+      codex_micro::parseStickS3ButtonAction("codex:ACT12", action));
+  expectAction(action, StickS3ButtonAction::CodexCommand);
+  TEST_ASSERT_EQUAL_STRING("ACT12",
+                           codex_micro::stickS3CodexCommandKey(
+                               action.commandIndex));
+
+  TEST_ASSERT_FALSE(
+      codex_micro::parseStickS3ButtonAction("key:256:7", action));
+  TEST_ASSERT_FALSE(
+      codex_micro::parseStickS3ButtonAction("key:0:0", action));
+  TEST_ASSERT_FALSE(
+      codex_micro::parseStickS3ButtonAction("codex:ACT99", action));
 }
 
 void testButtonBDoubleClickMovesBackFromNonzeroAgent() {
@@ -462,6 +507,8 @@ int main(int, char**) {
   RUN_TEST(testAgentSelectionWrapsAfterSixSingleClicks);
   RUN_TEST(testTimersSurviveMillisRollover);
   RUN_TEST(testButtonATimersSurviveMillisRollover);
+  RUN_TEST(testButtonGesturesCanBeRemapped);
+  RUN_TEST(testButtonActionTokensAreValidated);
   RUN_TEST(testButtonBDoubleClickMovesBackFromNonzeroAgent);
   RUN_TEST(testReleaseAfterHoldDoesNotStartPendingButtonBClick);
   RUN_TEST(testZeroAgentCountFallsBackToOneAgent);

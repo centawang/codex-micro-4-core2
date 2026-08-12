@@ -1,0 +1,1145 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="通过 USB 配置 Stick S3 的 BtnA 和 BtnB 手势映射。">
+  <title>Stick S3 按键配置</title>
+  <script>
+    (() => {
+      const param = new URLSearchParams(window.location.search).get("scoutTheme");
+      const theme =
+        param || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --cp-bg: #f7f4ef;
+      --cp-bg-elevated: #fcfbf8;
+      --cp-surface: #ffffff;
+      --cp-surface-soft: #f5f5f5;
+      --cp-border: #dedede;
+      --cp-border-strong: #919191;
+      --cp-text: #242424;
+      --cp-text-muted: #5c5c5c;
+      --cp-text-soft: #6f6f6f;
+      --cp-accent: #b11f4b;
+      --cp-accent-hover: #9a1a41;
+      --cp-accent-soft: rgba(177, 31, 75, 0.08);
+      --cp-accent-fg: #ffffff;
+      --cp-success: #16a34a;
+      --cp-danger: #dc2626;
+      --cp-warning: #f59e0b;
+      --cp-link: #0078d4;
+      --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+      --cp-overlay: rgba(255, 255, 255, 0.8);
+      --cp-panel: rgba(255, 255, 255, 0.86);
+      --cp-panel-strong: rgba(255, 255, 255, 0.96);
+      --cp-sheen: rgba(255, 255, 255, 0.55);
+      --cp-highlight: rgba(177, 31, 75, 0.12);
+    }
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --cp-bg: #3d3b3a;
+      --cp-bg-elevated: #343231;
+      --cp-surface: #292929;
+      --cp-surface-soft: #2e2e2e;
+      --cp-border: #474747;
+      --cp-border-strong: #5f5f5f;
+      --cp-text: #dedede;
+      --cp-text-muted: #919191;
+      --cp-text-soft: #b0b0b0;
+      --cp-accent: #fd8ea1;
+      --cp-accent-hover: #fb7b91;
+      --cp-accent-soft: rgba(253, 142, 161, 0.14);
+      --cp-accent-fg: #1a1a1a;
+      --cp-success: #4ade80;
+      --cp-danger: #f87171;
+      --cp-warning: #fbbf24;
+      --cp-link: #4da6ff;
+      --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+      --cp-overlay: rgba(41, 41, 41, 0.88);
+      --cp-panel: rgba(41, 41, 41, 0.72);
+      --cp-panel-strong: rgba(41, 41, 41, 0.96);
+      --cp-sheen: rgba(255, 255, 255, 0.04);
+      --cp-highlight: rgba(253, 142, 161, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      min-height: 100%;
+      font-family: "Segoe UI", Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif;
+      letter-spacing: 0;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      background-color: var(--cp-bg);
+      background-image:
+        linear-gradient(var(--cp-border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--cp-border) 1px, transparent 1px);
+      background-size: 32px 32px;
+      color: var(--cp-text);
+    }
+
+    button,
+    select,
+    input {
+      font: inherit;
+      letter-spacing: 0;
+    }
+
+    button,
+    select {
+      min-height: 40px;
+    }
+
+    button {
+      border: 1px solid var(--cp-border-strong);
+      border-radius: 0.625rem;
+      background: var(--cp-surface);
+      color: var(--cp-text);
+      cursor: pointer;
+      padding: 8px 14px;
+      transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
+    }
+
+    button:hover:not(:disabled) {
+      border-color: var(--cp-accent);
+      background: var(--cp-accent-soft);
+    }
+
+    button:active:not(:disabled) {
+      transform: translateY(1px);
+    }
+
+    button:focus-visible,
+    select:focus-visible,
+    input:focus-visible {
+      outline: 3px solid var(--cp-highlight);
+      outline-offset: 2px;
+    }
+
+    button:disabled,
+    select:disabled,
+    input:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    .primary-button {
+      border-color: var(--cp-accent);
+      background: var(--cp-accent);
+      color: var(--cp-accent-fg);
+      font-weight: 700;
+    }
+
+    .primary-button:hover:not(:disabled) {
+      border-color: var(--cp-accent-hover);
+      background: var(--cp-accent-hover);
+    }
+
+    .danger-button:hover:not(:disabled) {
+      border-color: var(--cp-danger);
+      color: var(--cp-danger);
+    }
+
+    .app-shell {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 24px 0 40px;
+    }
+
+    .app-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 18px 20px;
+      border: 1px solid var(--cp-border);
+      border-radius: 16px;
+      background: var(--cp-panel-strong);
+      box-shadow: 0 0 2px var(--cp-border), 0 1px 2px var(--cp-border);
+      animation: rise 260ms ease both;
+    }
+
+    .title-block {
+      min-width: 0;
+    }
+
+    h1,
+    h2,
+    p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      line-height: 1.25;
+      font-weight: 750;
+    }
+
+    .subtitle {
+      margin-top: 4px;
+      color: var(--cp-text-muted);
+      font-size: 0.9rem;
+    }
+
+    .connection-cluster {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 0 0 auto;
+    }
+
+    .connection-state {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 92px;
+      color: var(--cp-text-muted);
+      font-size: 0.875rem;
+      font-weight: 650;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: var(--cp-border-strong);
+    }
+
+    .connection-state.connected {
+      color: var(--cp-success);
+    }
+
+    .connection-state.connected .status-dot {
+      background: var(--cp-success);
+    }
+
+    .connection-state.error {
+      color: var(--cp-danger);
+    }
+
+    .connection-state.error .status-dot {
+      background: var(--cp-danger);
+    }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      min-height: 44px;
+      margin-top: 16px;
+      padding: 10px 14px;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      background: var(--cp-bg-elevated);
+      color: var(--cp-text-muted);
+      font-size: 0.9rem;
+      animation: rise 260ms 60ms ease both;
+    }
+
+    .status-bar.success {
+      border-color: var(--cp-success);
+      color: var(--cp-success);
+    }
+
+    .status-bar.warning {
+      border-color: var(--cp-warning);
+      color: var(--cp-text);
+    }
+
+    .status-bar.error {
+      border-color: var(--cp-danger);
+      color: var(--cp-danger);
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+      gap: 24px;
+      align-items: start;
+      margin-top: 24px;
+    }
+
+    .device-panel,
+    .config-panel {
+      border: 1px solid var(--cp-border);
+      border-radius: 16px;
+      background: var(--cp-panel-strong);
+      box-shadow: 0 0 2px var(--cp-border), 0 1px 2px var(--cp-border);
+    }
+
+    .device-panel {
+      position: sticky;
+      top: 20px;
+      padding: 20px;
+      animation: rise 300ms 100ms ease both;
+    }
+
+    .panel-heading {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .panel-heading h2 {
+      font-size: 1rem;
+      line-height: 1.3;
+    }
+
+    .panel-kicker {
+      color: var(--cp-text-muted);
+      font-family: Consolas, "Courier New", Courier, monospace;
+      font-size: 0.75rem;
+    }
+
+    .device-stage {
+      display: grid;
+      place-items: center;
+      min-height: 420px;
+      padding: 18px;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      background: var(--cp-surface-soft);
+      overflow: hidden;
+    }
+
+    .device {
+      position: relative;
+      width: 172px;
+      height: 344px;
+      padding: 20px 18px;
+      border: 5px solid var(--cp-border-strong);
+      border-radius: 28px;
+      background: var(--cp-surface);
+      box-shadow: 0 12px 30px var(--cp-border);
+    }
+
+    .device::before {
+      content: "STICK S3";
+      position: absolute;
+      top: 7px;
+      left: 0;
+      width: 100%;
+      color: var(--cp-text-muted);
+      font-family: Consolas, "Courier New", Courier, monospace;
+      font-size: 0.6rem;
+      text-align: center;
+    }
+
+    .device-screen {
+      display: grid;
+      grid-template-rows: 28px 1fr 1fr;
+      height: 294px;
+      border: 3px solid var(--cp-text);
+      border-radius: 8px;
+      background: var(--cp-bg-elevated);
+      overflow: hidden;
+    }
+
+    .screen-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px;
+      border-bottom: 1px solid var(--cp-border);
+      color: var(--cp-text-muted);
+      font-family: Consolas, "Courier New", Courier, monospace;
+      font-size: 0.58rem;
+      font-weight: 700;
+    }
+
+    .screen-live {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--cp-success);
+    }
+
+    .screen-binding {
+      display: grid;
+      align-content: center;
+      gap: 7px;
+      padding: 10px;
+      border-bottom: 1px solid var(--cp-border);
+    }
+
+    .screen-binding:last-child {
+      border-bottom: 0;
+    }
+
+    .screen-button-name {
+      color: var(--cp-accent);
+      font-family: Consolas, "Courier New", Courier, monospace;
+      font-size: 1.5rem;
+      font-weight: 800;
+    }
+
+    .screen-action {
+      min-width: 0;
+      overflow: hidden;
+      color: var(--cp-text);
+      font-size: 0.68rem;
+      line-height: 1.35;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .device-key {
+      position: absolute;
+      right: -20px;
+      width: 30px;
+      min-height: 48px;
+      padding: 0;
+      border: 3px solid var(--cp-border-strong);
+      border-radius: 8px;
+      background: var(--cp-accent);
+      color: var(--cp-accent-fg);
+      font-family: Consolas, "Courier New", Courier, monospace;
+      font-weight: 800;
+    }
+
+    .device-key-a {
+      top: 92px;
+    }
+
+    .device-key-b {
+      top: 176px;
+    }
+
+    .config-panel {
+      overflow: hidden;
+      animation: rise 300ms 160ms ease both;
+    }
+
+    .config-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--cp-border);
+    }
+
+    .config-header h2 {
+      font-size: 1.05rem;
+    }
+
+    .config-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .button-group {
+      scroll-margin-top: 20px;
+    }
+
+    .group-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 20px 10px;
+      color: var(--cp-text);
+      font-size: 0.92rem;
+      font-weight: 750;
+    }
+
+    .group-badge {
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--cp-accent);
+      color: var(--cp-accent-fg);
+      font-family: Consolas, "Courier New", Courier, monospace;
+    }
+
+    .mapping-row {
+      display: grid;
+      grid-template-columns: minmax(116px, 0.42fr) minmax(220px, 1fr);
+      gap: 16px;
+      align-items: start;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--cp-border);
+    }
+
+    .mapping-label {
+      padding-top: 10px;
+    }
+
+    .mapping-label strong {
+      display: block;
+      font-size: 0.9rem;
+    }
+
+    .mapping-label span {
+      display: block;
+      margin-top: 3px;
+      color: var(--cp-text-muted);
+      font-size: 0.76rem;
+    }
+
+    .mapping-control {
+      min-width: 0;
+    }
+
+    select {
+      width: 100%;
+      border: 1px solid var(--cp-border-strong);
+      border-radius: 0.625rem;
+      background: var(--cp-surface);
+      color: var(--cp-text);
+      padding: 8px 36px 8px 12px;
+    }
+
+    .custom-shortcut {
+      display: grid;
+      gap: 12px;
+      margin-top: 12px;
+      padding: 12px;
+      border-left: 3px solid var(--cp-accent);
+      background: var(--cp-accent-soft);
+    }
+
+    .custom-shortcut[hidden] {
+      display: none;
+    }
+
+    .modifier-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .modifier-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 34px;
+      color: var(--cp-text-soft);
+      font-size: 0.75rem;
+    }
+
+    .modifier-toggle input {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      accent-color: var(--cp-accent);
+    }
+
+    .key-row {
+      display: grid;
+      grid-template-columns: 88px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+    }
+
+    .key-row label {
+      color: var(--cp-text-muted);
+      font-size: 0.8rem;
+    }
+
+    details {
+      border-top: 1px solid var(--cp-border);
+      background: var(--cp-bg-elevated);
+    }
+
+    summary {
+      cursor: pointer;
+      padding: 12px 20px;
+      color: var(--cp-text-muted);
+      font-size: 0.82rem;
+      font-weight: 650;
+    }
+
+    .serial-log {
+      max-height: 180px;
+      margin: 0;
+      overflow: auto;
+      padding: 12px 20px 18px;
+      color: var(--cp-text-soft);
+      font-family: Consolas, "Courier New", Courier, monospace;
+      font-size: 0.72rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+
+    @keyframes rise {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 880px) {
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+
+      .device-panel {
+        position: static;
+      }
+
+      .device-stage {
+        min-height: 390px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .app-shell {
+        width: min(100% - 20px, 1180px);
+        padding-top: 10px;
+      }
+
+      .app-header,
+      .config-header {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .connection-cluster,
+      .config-actions {
+        justify-content: space-between;
+      }
+
+      .mapping-row {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+
+      .mapping-label {
+        padding-top: 0;
+      }
+
+      .modifier-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 1ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app-shell">
+    <header class="app-header">
+      <div class="title-block">
+        <h1>Stick S3 按键配置</h1>
+        <p class="subtitle">Codex Micro · USB</p>
+      </div>
+      <div class="connection-cluster">
+        <div id="connectionState" class="connection-state" aria-live="polite">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="connectionLabel">未连接</span>
+        </div>
+        <button id="connectButton" class="primary-button" type="button">连接设备</button>
+      </div>
+    </header>
+
+    <div id="statusBar" class="status-bar" role="status" aria-live="polite">
+      请选择 Stick S3 串口。
+    </div>
+
+    <div class="workspace">
+      <section class="device-panel" aria-labelledby="deviceHeading">
+        <div class="panel-heading">
+          <h2 id="deviceHeading">设备预览</h2>
+          <span class="panel-kicker">STICK S3</span>
+        </div>
+        <div class="device-stage">
+          <div class="device" aria-label="Stick S3 按键预览">
+            <div class="device-screen">
+              <div class="screen-header">
+                <span>BUTTON MAP</span>
+                <span class="screen-live" aria-hidden="true"></span>
+              </div>
+              <div class="screen-binding">
+                <span class="screen-button-name">A</span>
+                <span id="previewASingle" class="screen-action">单击 · Enter</span>
+                <span id="previewADouble" class="screen-action">双击 · Right Alt</span>
+              </div>
+              <div class="screen-binding">
+                <span class="screen-button-name">B</span>
+                <span id="previewBSingle" class="screen-action">单击 · 下一个 Agent</span>
+                <span id="previewBDouble" class="screen-action">双击 · 上一个 Agent</span>
+                <span id="previewBHold" class="screen-action">长按 · 打开选中 Agent</span>
+              </div>
+            </div>
+            <button class="device-key device-key-a" type="button" data-focus-group="groupA" aria-label="编辑 BtnA">A</button>
+            <button class="device-key device-key-b" type="button" data-focus-group="groupB" aria-label="编辑 BtnB">B</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="config-panel" aria-labelledby="configHeading">
+        <div class="config-header">
+          <h2 id="configHeading">按键映射</h2>
+          <div class="config-actions">
+            <button id="readButton" type="button" disabled>读取设备</button>
+            <button id="resetButton" class="danger-button" type="button" disabled>恢复默认</button>
+            <button id="saveButton" class="primary-button" type="button" disabled>写入设备</button>
+          </div>
+        </div>
+
+        <div id="groupA" class="button-group">
+          <div class="group-title"><span class="group-badge">A</span>BtnA</div>
+          <div id="rowsA"></div>
+        </div>
+
+        <div id="groupB" class="button-group">
+          <div class="group-title"><span class="group-badge">B</span>BtnB</div>
+          <div id="rowsB"></div>
+        </div>
+
+        <details>
+          <summary>通信日志</summary>
+          <pre id="serialLog" class="serial-log" aria-live="polite"></pre>
+        </details>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const SLOTS = [
+        { id: "aSingle", button: "A", gesture: "单击", hint: "350 ms 后确认", defaultToken: "enter", preview: "previewASingle" },
+        { id: "aDouble", button: "A", gesture: "双击", hint: "350 ms 窗口", defaultToken: "right_alt", preview: "previewADouble" },
+        { id: "bSingle", button: "B", gesture: "单击", hint: "350 ms 后确认", defaultToken: "next", preview: "previewBSingle" },
+        { id: "bDouble", button: "B", gesture: "双击", hint: "350 ms 窗口", defaultToken: "previous", preview: "previewBDouble" },
+        { id: "bHold", button: "B", gesture: "长按", hint: "500 ms", defaultToken: "activate", preview: "previewBHold" }
+      ];
+
+      const ACTIONS = [
+        { value: "none", label: "不执行" },
+        { value: "enter", label: "Enter" },
+        { value: "right_alt", label: "Right Alt" },
+        { value: "ctrl_shift_d", label: "Ctrl + Shift + D" },
+        { value: "custom", label: "自定义键盘快捷键" },
+        { value: "next", label: "下一个 Agent" },
+        { value: "previous", label: "上一个 Agent" },
+        { value: "activate", label: "打开选中 Agent" },
+        { value: "codex:ACT06", label: "Codex · Fast" },
+        { value: "codex:ACT07", label: "Codex · Approve" },
+        { value: "codex:ACT08", label: "Codex · Reject" },
+        { value: "codex:ACT09", label: "Codex · New Chat" },
+        { value: "codex:ACT10", label: "Codex · Mic 槽" },
+        { value: "codex:ACT12", label: "Codex · Send" }
+      ];
+
+      const MODIFIERS = [
+        { bit: 1, label: "左 Ctrl" },
+        { bit: 2, label: "左 Shift" },
+        { bit: 4, label: "左 Alt" },
+        { bit: 8, label: "左 Win" },
+        { bit: 16, label: "右 Ctrl" },
+        { bit: 32, label: "右 Shift" },
+        { bit: 64, label: "右 Alt" },
+        { bit: 128, label: "右 Win" }
+      ];
+
+      const KEY_OPTIONS = [
+        [0, "仅修饰键"],
+        [40, "Enter"], [41, "Escape"], [42, "Backspace"], [43, "Tab"], [44, "Space"],
+        [58, "F1"], [59, "F2"], [60, "F3"], [61, "F4"], [62, "F5"], [63, "F6"],
+        [64, "F7"], [65, "F8"], [66, "F9"], [67, "F10"], [68, "F11"], [69, "F12"],
+        [73, "Insert"], [74, "Home"], [75, "Page Up"], [76, "Delete"], [77, "End"], [78, "Page Down"],
+        [79, "Right Arrow"], [80, "Left Arrow"], [81, "Down Arrow"], [82, "Up Arrow"]
+      ];
+
+      for (let index = 0; index < 26; index += 1) {
+        KEY_OPTIONS.splice(1 + index, 0, [4 + index, String.fromCharCode(65 + index)]);
+      }
+      const digits = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
+      digits.forEach((digit, index) => KEY_OPTIONS.splice(27 + index, 0, [30 + index, digit]));
+
+      const rows = new Map();
+      const encoder = new TextEncoder();
+      const decoder = new TextDecoder();
+      let port = null;
+      let reader = null;
+      let writer = null;
+      let readLoopPromise = null;
+      let incoming = "";
+      let connected = false;
+      let receivedConfig = false;
+      let dirty = false;
+      let disconnecting = false;
+
+      const connectButton = document.getElementById("connectButton");
+      const readButton = document.getElementById("readButton");
+      const resetButton = document.getElementById("resetButton");
+      const saveButton = document.getElementById("saveButton");
+      const connectionState = document.getElementById("connectionState");
+      const connectionLabel = document.getElementById("connectionLabel");
+      const statusBar = document.getElementById("statusBar");
+      const serialLog = document.getElementById("serialLog");
+
+      function actionLabel(token) {
+        const known = ACTIONS.find((action) => action.value === token);
+        if (known) return known.label;
+        const match = /^key:(\d+):(\d+)$/.exec(token);
+        if (!match) return token;
+        const modifier = Number(match[1]);
+        const key = Number(match[2]);
+        const modifierNames = MODIFIERS.filter((item) => (modifier & item.bit) !== 0).map((item) => item.label.replace("左 ", "").replace("右 ", "R"));
+        const keyOption = KEY_OPTIONS.find((item) => item[0] === key);
+        const keyName = keyOption ? keyOption[1] : `HID ${key}`;
+        return [...modifierNames, keyName].filter(Boolean).join(" + ");
+      }
+
+      function setStatus(message, kind = "") {
+        statusBar.textContent = message;
+        statusBar.className = `status-bar${kind ? ` ${kind}` : ""}`;
+      }
+
+      function log(message, direction = "") {
+        const time = new Date().toLocaleTimeString([], { hour12: false });
+        const prefix = direction ? `${direction} ` : "";
+        serialLog.textContent += `[${time}] ${prefix}${message}\n`;
+        serialLog.scrollTop = serialLog.scrollHeight;
+      }
+
+      function updateConnectionUi(state, message) {
+        connected = state === "connected";
+        connectionState.className = `connection-state${state === "connected" ? " connected" : state === "error" ? " error" : ""}`;
+        connectionLabel.textContent = message;
+        connectButton.textContent = connected ? "断开设备" : "连接设备";
+        readButton.disabled = !connected;
+        resetButton.disabled = !connected;
+        saveButton.disabled = !connected;
+      }
+
+      function markDirty() {
+        dirty = true;
+        updatePreview();
+        if (connected) setStatus("配置已修改，等待写入设备。", "warning");
+      }
+
+      function ensureKeyOption(select, key) {
+        if ([...select.options].some((option) => Number(option.value) === key)) return;
+        const option = document.createElement("option");
+        option.value = String(key);
+        option.textContent = `HID ${key}`;
+        select.append(option);
+      }
+
+      function buildKeySelect() {
+        const select = document.createElement("select");
+        select.className = "custom-key-select";
+        select.setAttribute("aria-label", "主键");
+        KEY_OPTIONS.forEach(([value, label]) => {
+          const option = document.createElement("option");
+          option.value = String(value);
+          option.textContent = label;
+          select.append(option);
+        });
+        return select;
+      }
+
+      function createMappingRow(slot) {
+        const row = document.createElement("div");
+        row.className = "mapping-row";
+        row.dataset.slot = slot.id;
+
+        const label = document.createElement("div");
+        label.className = "mapping-label";
+        const strong = document.createElement("strong");
+        strong.textContent = slot.gesture;
+        const hint = document.createElement("span");
+        hint.textContent = slot.hint;
+        label.append(strong, hint);
+
+        const control = document.createElement("div");
+        control.className = "mapping-control";
+        const select = document.createElement("select");
+        select.setAttribute("aria-label", `Btn${slot.button} ${slot.gesture}动作`);
+        ACTIONS.forEach((action) => {
+          const option = document.createElement("option");
+          option.value = action.value;
+          option.textContent = action.label;
+          select.append(option);
+        });
+
+        const custom = document.createElement("div");
+        custom.className = "custom-shortcut";
+        custom.hidden = true;
+        const modifierGrid = document.createElement("div");
+        modifierGrid.className = "modifier-grid";
+        const modifierInputs = [];
+        MODIFIERS.forEach((modifier) => {
+          const toggle = document.createElement("label");
+          toggle.className = "modifier-toggle";
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.value = String(modifier.bit);
+          const text = document.createElement("span");
+          text.textContent = modifier.label;
+          toggle.append(input, text);
+          modifierGrid.append(toggle);
+          modifierInputs.push(input);
+          input.addEventListener("change", markDirty);
+        });
+
+        const keyRow = document.createElement("div");
+        keyRow.className = "key-row";
+        const keyLabel = document.createElement("label");
+        keyLabel.textContent = "主键";
+        const keySelect = buildKeySelect();
+        keyRow.append(keyLabel, keySelect);
+        custom.append(modifierGrid, keyRow);
+        control.append(select, custom);
+        row.append(label, control);
+
+        select.addEventListener("change", () => {
+          custom.hidden = select.value !== "custom";
+          markDirty();
+        });
+        keySelect.addEventListener("change", markDirty);
+
+        rows.set(slot.id, { slot, row, select, custom, modifierInputs, keySelect, token: slot.defaultToken });
+        return row;
+      }
+
+      function renderRows() {
+        const rowsA = document.getElementById("rowsA");
+        const rowsB = document.getElementById("rowsB");
+        SLOTS.forEach((slot) => {
+          const row = createMappingRow(slot);
+          (slot.button === "A" ? rowsA : rowsB).append(row);
+          setRowToken(rows.get(slot.id), slot.defaultToken, false);
+        });
+        updatePreview();
+      }
+
+      function customToken(row) {
+        const modifier = row.modifierInputs.reduce((mask, input) => mask | (input.checked ? Number(input.value) : 0), 0);
+        const key = Number(row.keySelect.value);
+        if (modifier === 0 && key === 0) return null;
+        return `key:${modifier}:${key}`;
+      }
+
+      function rowToken(row) {
+        return row.select.value === "custom" ? customToken(row) : row.select.value;
+      }
+
+      function setRowToken(row, token, notify = true) {
+        const known = ACTIONS.some((action) => action.value === token && action.value !== "custom");
+        if (known) {
+          row.select.value = token;
+          row.custom.hidden = true;
+        } else {
+          const match = /^key:(\d+):(\d+)$/.exec(token);
+          if (!match) return false;
+          const modifier = Number(match[1]);
+          const key = Number(match[2]);
+          row.select.value = "custom";
+          row.custom.hidden = false;
+          row.modifierInputs.forEach((input) => {
+            input.checked = (modifier & Number(input.value)) !== 0;
+          });
+          ensureKeyOption(row.keySelect, key);
+          row.keySelect.value = String(key);
+        }
+        row.token = token;
+        if (notify) updatePreview();
+        return true;
+      }
+
+      function updatePreview() {
+        SLOTS.forEach((slot) => {
+          const row = rows.get(slot.id);
+          const token = rowToken(row) || "none";
+          document.getElementById(slot.preview).textContent = `${slot.gesture} · ${actionLabel(token)}`;
+        });
+      }
+
+      function collectTokens() {
+        const tokens = [];
+        for (const slot of SLOTS) {
+          const token = rowToken(rows.get(slot.id));
+          if (!token) return null;
+          tokens.push(token);
+        }
+        return tokens;
+      }
+
+      async function sendCommand(command) {
+        if (!writer || !connected) {
+          setStatus("设备未连接。", "error");
+          return;
+        }
+        log(command, ">>");
+        await writer.write(encoder.encode(`${command}\n`));
+      }
+
+      function applyDeviceConfig(tokens) {
+        if (tokens.length !== SLOTS.length) return;
+        tokens.forEach((token, index) => setRowToken(rows.get(SLOTS[index].id), token, false));
+        dirty = false;
+        receivedConfig = true;
+        updatePreview();
+        setStatus("配置已与 Stick S3 同步。", "success");
+      }
+
+      function handleSerialLine(line) {
+        const clean = line.trim();
+        if (!clean) return;
+        log(clean, "<<");
+        const parts = clean.split(/\s+/);
+        if (parts[0] !== "BUTTONS") return;
+        if (parts[1] === "READY") {
+          setStatus("设备已连接，正在读取配置。", "success");
+        } else if (parts[1] === "CONFIG" && parts.length === 7) {
+          applyDeviceConfig(parts.slice(2));
+        } else if (parts[1] === "OK") {
+          setStatus("配置已写入设备。", "success");
+        } else if (parts[1] === "ERROR") {
+          setStatus(`设备拒绝配置：${parts.slice(2).join(" ")}`, "error");
+        }
+      }
+
+      async function readLoop() {
+        reader = port.readable.getReader();
+        try {
+          while (connected) {
+            const result = await reader.read();
+            if (result.done) break;
+            incoming += decoder.decode(result.value, { stream: true });
+            let newline = incoming.indexOf("\n");
+            while (newline >= 0) {
+              handleSerialLine(incoming.slice(0, newline));
+              incoming = incoming.slice(newline + 1);
+              newline = incoming.indexOf("\n");
+            }
+          }
+        } catch (error) {
+          if (!disconnecting) {
+            log(error.message || String(error));
+            setStatus("串口读取中断。", "error");
+          }
+        } finally {
+          reader.releaseLock();
+          reader = null;
+        }
+      }
+
+      async function connect() {
+        if (!("serial" in navigator)) {
+          updateConnectionUi("error", "不支持");
+          setStatus("请使用最新版 Microsoft Edge 或 Chrome 打开此文件。", "error");
+          return;
+        }
+        try {
+          const grantedPorts = await navigator.serial.getPorts();
+          port = grantedPorts.find((candidate) => {
+            const info = candidate.getInfo();
+            return info.usbVendorId === 0x303A && info.usbProductId === 0x1001;
+          }) || await navigator.serial.requestPort({ filters: [{ usbVendorId: 0x303A, usbProductId: 0x1001 }] });
+          await port.open({ baudRate: 115200 });
+          writer = port.writable.getWriter();
+          disconnecting = false;
+          receivedConfig = false;
+          updateConnectionUi("connected", "已连接");
+          setStatus("正在读取 Stick S3 配置。", "success");
+          log("Serial connected");
+          readLoopPromise = readLoop();
+          window.setTimeout(() => {
+            if (connected) sendCommand("BUTTONS GET");
+          }, 500);
+          window.setTimeout(() => {
+            if (connected && !receivedConfig) {
+              setStatus("未收到配置响应，请确认设备已烧录可配置固件。", "warning");
+            }
+          }, 2200);
+        } catch (error) {
+          updateConnectionUi("error", "连接失败");
+          setStatus(error.message || "无法打开串口。", "error");
+          log(error.message || String(error));
+        }
+      }
+
+      async function disconnect() {
+        disconnecting = true;
+        connected = false;
+        try {
+          if (reader) await reader.cancel();
+          if (readLoopPromise) await readLoopPromise;
+          if (writer) {
+            writer.releaseLock();
+            writer = null;
+          }
+          if (port) await port.close();
+        } catch (error) {
+          log(error.message || String(error));
+        } finally {
+          port = null;
+          incoming = "";
+          readLoopPromise = null;
+          disconnecting = false;
+          updateConnectionUi("idle", "未连接");
+          setStatus("设备已断开。", "");
+        }
+      }
+
+      connectButton.addEventListener("click", () => connected ? disconnect() : connect());
+      readButton.addEventListener("click", () => sendCommand("BUTTONS GET"));
+      resetButton.addEventListener("click", () => sendCommand("BUTTONS RESET"));
+      saveButton.addEventListener("click", async () => {
+        const tokens = collectTokens();
+        if (!tokens) {
+          setStatus("自定义快捷键至少需要一个修饰键或主键。", "error");
+          return;
+        }
+        await sendCommand(`BUTTONS SET ${tokens.join(" ")}`);
+      });
+
+      document.querySelectorAll("[data-focus-group]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const group = document.getElementById(button.dataset.focusGroup);
+          group.scrollIntoView({ behavior: "smooth", block: "start" });
+          const firstSelect = group.querySelector("select");
+          if (firstSelect) firstSelect.focus({ preventScroll: true });
+        });
+      });
+
+      if ("serial" in navigator) {
+        navigator.serial.addEventListener("disconnect", (event) => {
+          if (port && event.target === port && !disconnecting) disconnect();
+        });
+      } else {
+        updateConnectionUi("error", "不支持");
+        setStatus("请使用最新版 Microsoft Edge 或 Chrome 打开此文件。", "error");
+      }
+
+      renderRows();
+    })();
+  </script>
+</body>
+</html>

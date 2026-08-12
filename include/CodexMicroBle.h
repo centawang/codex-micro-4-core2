@@ -49,6 +49,7 @@ class CodexMicroBle {
   void sendJoystick(float angle, float distance);
   void sendEnter();
   void sendRightAlt();
+  void sendKeyboardShortcut(uint8_t modifier, uint8_t key);
   void setModifier(uint8_t modifier);
   // Must be called from the Arduino task; host requests are handled there.
   void poll();

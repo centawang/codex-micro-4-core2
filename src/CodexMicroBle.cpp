@@ -218,6 +218,12 @@ void CodexMicroBle::sendRightAlt() {
   Serial.println("Keyboard Right Alt");
 }
 
+void CodexMicroBle::sendKeyboardShortcut(uint8_t modifier, uint8_t key) {
+  sendKeyboard(modifier, key);
+  Serial.printf("Keyboard shortcut modifier=0x%02X key=0x%02X\n", modifier,
+                key);
+}
+
 void CodexMicroBle::sendKeyboard(uint8_t modifier, uint8_t key) {
   if (keyboardInput_ == nullptr || !connected()) {
     return;

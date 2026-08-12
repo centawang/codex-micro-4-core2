@@ -87,6 +87,16 @@ Run the hardware-independent StickS3 button tests with:
 pio test -e native
 ```
 
+### Configure StickS3 buttons
+
+Open [tools/sticks3-button-configurator.html](tools/sticks3-button-configurator.html)
+directly in Microsoft Edge or Google Chrome, connect the StickS3 USB serial
+port, and assign actions to the `BtnA` single/double clicks and the `BtnB`
+single/double/hold gestures. The page supports Agent navigation, Codex commands,
+common keyboard actions, and custom HID shortcuts. Written settings are stored
+in the StickS3 NVS and remain active after power-off; **Restore defaults** returns
+to Enter, Right Alt, next Agent, previous Agent, and activate selected Agent.
+
 CoreS3 exposes the serial monitor over native USB CDC, so the port disappears
 and re-enumerates on every reset.
 
