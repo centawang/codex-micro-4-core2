@@ -3,11 +3,13 @@
 
 #include <Arduino.h>
 #include <M5Unified.h>
+#include <Preferences.h>
 
 #include <cmath>
 
 #include "CodexMicroBle.h"
 #include "CoreAgentCardStyle.h"
+#include "StopWatchAlert.h"
 #include "StopWatchButtonController.h"
 #include "StopWatchNavigateControl.h"
 #include "StopWatchSwipe.h"
@@ -35,18 +37,21 @@ struct TouchAction {
   float angle = 0.0f;
   uint8_t modifier = 0;
   int8_t pageIndex = -1;
+  bool muteToggle = false;
 
   TouchAction() = default;
   TouchAction(const char* keyValue, int8_t agentValue, bool encoderStepValue,
               bool joystickValue, float angleValue,
-              uint8_t modifierValue = 0, int8_t pageIndexValue = -1)
+              uint8_t modifierValue = 0, int8_t pageIndexValue = -1,
+              bool muteToggleValue = false)
       : key(keyValue),
         agent(agentValue),
         encoderStep(encoderStepValue),
         joystick(joystickValue),
         angle(angleValue),
         modifier(modifierValue),
-        pageIndex(pageIndexValue) {}
+        pageIndex(pageIndexValue),
+        muteToggle(muteToggleValue) {}
 };
 
 constexpr uint16_t kBackground = 0x0841;
@@ -87,6 +92,17 @@ constexpr int kDialPressRadius = 46;
 constexpr uint32_t kJoystickReportIntervalMs = 32;
 constexpr uint32_t kNavigateRedrawIntervalMs = 24;
 
+constexpr int kMuteSwitchX = 150;
+constexpr int kMuteSwitchY = 330;
+constexpr int kMuteSwitchWidth = 168;
+constexpr int kMuteSwitchHeight = 46;
+constexpr uint8_t kAlertBeepCount = 3;
+constexpr uint8_t kAlertVolume = 160;
+constexpr float kAlertToneHz = 2200.0f;
+constexpr uint32_t kAlertToneMs = 90;
+constexpr char kStopWatchPreferencesNamespace[] = "stopwatch";
+constexpr char kMutePreferenceKey[] = "mute";
+
 const char* kAgentKeys[] = {"AG00", "AG01", "AG02",
                             "AG03", "AG04", "AG05"};
 const char* kCommandKeys[] = {"ACT06", "ACT07", "ACT08",
@@ -102,6 +118,8 @@ CodexMicroBle codex;
 CodexMicroState state;
 M5Canvas canvas(&M5.Display);
 codex_micro::StopWatchButtonController physicalButtons;
+codex_micro::StopWatchBeepSequence beepSequence;
+bool alertMuted = false;
 Page page = Page::Tasks;
 TouchAction activeAction;
 bool touchActive = false;
@@ -157,6 +175,40 @@ void updateHaptic(uint32_t now) {
   if (hapticActive && now - hapticStartedMs >= kHapticDurationMs) {
     M5.Power.setVibration(0);
     hapticActive = false;
+  }
+}
+
+void loadMutePreference() {
+  Preferences preferences;
+  if (!preferences.begin(kStopWatchPreferencesNamespace, true)) {
+    return;
+  }
+  alertMuted = preferences.getBool(kMutePreferenceKey, false);
+  preferences.end();
+}
+
+void saveMutePreference() {
+  Preferences preferences;
+  if (!preferences.begin(kStopWatchPreferencesNamespace, false)) {
+    return;
+  }
+  preferences.putBool(kMutePreferenceKey, alertMuted);
+  preferences.end();
+}
+
+void playAlertTone() { M5.Speaker.tone(kAlertToneHz, kAlertToneMs); }
+
+void startAlert(codex_micro::StopWatchAlert alert, uint32_t now) {
+  Serial.printf("Alert %s%s\n",
+                alert == codex_micro::StopWatchAlert::NeedsApproval
+                    ? "needs-approval"
+                    : "completed",
+                alertMuted ? " (muted)" : "");
+  if (alertMuted) {
+    return;
+  }
+  if (beepSequence.start(now, kAlertBeepCount)) {
+    playAlertTone();
   }
 }
 
@@ -409,6 +461,23 @@ void drawNavigate() {
           dialPressed ? kText : 0xFFE0);
   drawCentered("PRESS", kDialCenterX, kNavigateCenterY - 7, 1, kText);
   drawCentered("SETTINGS", kDialCenterX, kNavigateCenterY + 14, 1, kMuted);
+
+  const int trackRadius = kMuteSwitchHeight / 2;
+  canvas.fillRoundRect(scaleX(kMuteSwitchX), scaleY(kMuteSwitchY),
+                       scaleX(kMuteSwitchWidth), scaleY(kMuteSwitchHeight),
+                       scaleX(trackRadius), alertMuted ? kPanel : kAccent);
+  canvas.drawRoundRect(scaleX(kMuteSwitchX), scaleY(kMuteSwitchY),
+                       scaleX(kMuteSwitchWidth), scaleY(kMuteSwitchHeight),
+                       scaleX(trackRadius), alertMuted ? kMuted : kText);
+  const int knobX =
+      alertMuted ? kMuteSwitchX + trackRadius + 2
+                 : kMuteSwitchX + kMuteSwitchWidth - trackRadius - 2;
+  canvas.fillCircle(scaleX(knobX), scaleY(kMuteSwitchY + trackRadius),
+                    scaleX(trackRadius - 5), kText);
+  drawCentered(alertMuted ? "MUTED" : "ALERT",
+               alertMuted ? kMuteSwitchX + kMuteSwitchWidth - 54
+                          : kMuteSwitchX + 54,
+               kMuteSwitchY + trackRadius, 1, alertMuted ? kMuted : kText);
 }
 
 void drawScreen() {
@@ -466,6 +535,10 @@ TouchAction actionAt(int x, int y) {
     return {};
   }
 
+  if (inRect(x, y, kMuteSwitchX, kMuteSwitchY, kMuteSwitchWidth,
+             kMuteSwitchHeight)) {
+    return {nullptr, -1, false, false, 0.0f, 0, -1, true};
+  }
   return {};
 }
 
@@ -511,7 +584,7 @@ void releaseAction(bool redraw = true) {
 
 bool hasTouchAction(const TouchAction& action) {
   return action.key != nullptr || action.joystick || action.modifier != 0 ||
-         action.pageIndex >= 0;
+         action.pageIndex >= 0 || action.muteToggle;
 }
 
 void clearTouchGesture() {
@@ -655,9 +728,21 @@ void selectPage(int pageIndex) {
   drawScreen();
 }
 
+void toggleMute() {
+  alertMuted = !alertMuted;
+  if (alertMuted) {
+    beepSequence.stop();
+  }
+  saveMutePreference();
+  startHaptic();
+  drawScreen();
+}
+
 void triggerTouchAction(const TouchAction& action) {
   if (action.pageIndex >= 0) {
     selectPage(action.pageIndex);
+  } else if (action.muteToggle) {
+    toggleMute();
   } else {
     pressAction(action);
   }
@@ -701,7 +786,7 @@ void updateTouchGesture(const m5::touch_detail_t& touch, uint32_t now) {
     }
 
     if (!touchGestureMoved && !touchActionCommitted &&
-        pendingTouchAction.pageIndex < 0 &&
+        pendingTouchAction.pageIndex < 0 && !pendingTouchAction.muteToggle &&
         now - touchStartedMs >= kTouchActivationDelayMs) {
       triggerTouchAction(pendingTouchAction);
       touchActionCommitted = true;
@@ -780,6 +865,8 @@ void setup() {
   M5.Display.setRotation(0);
   M5.Display.setBrightness(100);
   M5.Display.setTextWrap(false);
+  M5.Speaker.setVolume(kAlertVolume);
+  loadMutePreference();
 
   if (M5.getBoard() != m5::board_t::board_M5StopWatch) {
     Serial.printf("Unexpected board id=%u\n",
@@ -845,11 +932,20 @@ void loop() {
       physicalButtons.pollButtonB(buttonNow, M5.BtnB.isPressed()));
 
   CodexMicroState latest = codex.snapshot();
+  const codex_micro::StopWatchAlert alert =
+      codex_micro::stopWatchAlertForChange(state.threads, latest.threads);
   if (latest.dirty || latest.connected != state.connected) {
     state = latest;
     drawScreen();
   } else {
     state = latest;
+  }
+
+  if (alert != codex_micro::StopWatchAlert::None) {
+    startAlert(alert, millis());
+  }
+  if (beepSequence.update(millis())) {
+    playAlertTone();
   }
 
   if (page == Page::Tasks && millis() - lastDrawMs > 80) {

@@ -9,6 +9,7 @@
 #include "StickS3ButtonController.h"
 #include "StickS3PowerController.h"
 #include "StickS3ScreenFlash.h"
+#include "StopWatchAlert.h"
 #include "StopWatchButtonController.h"
 #include "StopWatchNavigateControl.h"
 #include "StopWatchSwipe.h"
@@ -22,6 +23,8 @@ using codex_micro::StickS3PowerController;
 using codex_micro::StickS3ScreenFlash;
 using codex_micro::StopWatchButtonAction;
 using codex_micro::StopWatchButtonController;
+using codex_micro::StopWatchAlert;
+using codex_micro::StopWatchBeepSequence;
 using codex_micro::StopWatchDialGesture;
 
 struct FakeAgentStatus {
@@ -148,6 +151,71 @@ void testStopWatchDialHandlesAngleWraparound() {
   StopWatchDialGesture dial(16);
   dial.begin(-10, 2, 0, 0);
   TEST_ASSERT_EQUAL_INT(1, dial.update(-10, -2, 0, 0));
+}
+
+void testStopWatchAlertColorsMapToApprovalAndCompletion() {
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(StopWatchAlert::NeedsApproval),
+      static_cast<uint8_t>(codex_micro::stopWatchAlertForColor(0xFF6D00)));
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(StopWatchAlert::Completed),
+      static_cast<uint8_t>(codex_micro::stopWatchAlertForColor(0x00FF4C)));
+  const uint32_t nonAlertColors[] = {0x304FFEu, 0xFFFFFFu, 0xFF0033u,
+                                     0x000000u};
+  for (uint32_t color : nonAlertColors) {
+    TEST_ASSERT_EQUAL_UINT8(
+        static_cast<uint8_t>(StopWatchAlert::None),
+        static_cast<uint8_t>(codex_micro::stopWatchAlertForColor(color)));
+  }
+}
+
+void testStopWatchAlertOnlyFiresOnStatusTransition() {
+  FakeAgentStatuses before;
+  FakeAgentStatuses after;
+  for (size_t i = 0; i < before.size(); ++i) {
+    before[i].color = 0x304FFE;
+    after[i].color = 0x304FFE;
+  }
+
+  after[3].color = 0x00FF4C;
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(StopWatchAlert::Completed),
+      static_cast<uint8_t>(
+          codex_micro::stopWatchAlertForChange(before, after)));
+
+  // A repeated refresh of the same alert color stays silent.
+  before[3].color = 0x00FF4C;
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(StopWatchAlert::None),
+      static_cast<uint8_t>(
+          codex_micro::stopWatchAlertForChange(before, after)));
+}
+
+void testStopWatchApprovalOutranksCompletion() {
+  FakeAgentStatuses before;
+  FakeAgentStatuses after;
+  for (size_t i = 0; i < before.size(); ++i) {
+    before[i].color = 0xFFFFFF;
+    after[i].color = 0xFFFFFF;
+  }
+  after[0].color = 0x00FF4C;
+  after[5].color = 0xFF6D00;
+
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(StopWatchAlert::NeedsApproval),
+      static_cast<uint8_t>(
+          codex_micro::stopWatchAlertForChange(before, after)));
+}
+
+void testStopWatchBeepSequenceEmitsThreeBeeps() {
+  StopWatchBeepSequence beeps(200);
+
+  TEST_ASSERT_TRUE(beeps.start(1000, 3));
+  TEST_ASSERT_FALSE(beeps.update(1199));
+  TEST_ASSERT_TRUE(beeps.update(1200));
+  TEST_ASSERT_TRUE(beeps.update(1400));
+  TEST_ASSERT_FALSE(beeps.update(1600));
+  TEST_ASSERT_FALSE(beeps.active());
 }
 
 void testButtonASingleClickSendsEnterAfterWindow() {
@@ -628,6 +696,10 @@ int main(int, char**) {
   RUN_TEST(testStopWatchJoystickUsesContinuousAngleAndDistance);
   RUN_TEST(testStopWatchDialTracksClockwiseAndCounterclockwiseSteps);
   RUN_TEST(testStopWatchDialHandlesAngleWraparound);
+  RUN_TEST(testStopWatchAlertColorsMapToApprovalAndCompletion);
+  RUN_TEST(testStopWatchAlertOnlyFiresOnStatusTransition);
+  RUN_TEST(testStopWatchApprovalOutranksCompletion);
+  RUN_TEST(testStopWatchBeepSequenceEmitsThreeBeeps);
   RUN_TEST(testButtonASingleClickSendsEnterAfterWindow);
   RUN_TEST(testButtonADoubleClickAtBoundarySendsRightAltOnly);
   RUN_TEST(testZeroDoubleClickWindowOnlyAcceptsSameTimestamp);

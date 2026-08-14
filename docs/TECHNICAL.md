@@ -178,6 +178,15 @@ Each `v.oai.thstatus` array element may contain:
 
 The UI uses the color, brightness, and `breath` effect. Effect speed is stored
 but the current breathing animation uses a fixed local timing function.
+
+The host encodes slot state in the color field. `0xFF6D00` marks
+`awaiting-approval` or `awaiting-response`, `0x00FF4C` marks `unread`,
+`0x304FFE` marks `working`, `0xFFFFFF` marks `idle`, `0xFF0033` marks `error`,
+and `0x000000` marks an unassigned slot. StopWatch beeps three times when a slot
+newly enters the approval or unread color, so an unchanged slot never repeats
+the sound. Approval wins when both appear in one update. The beeps are paced by
+a non-blocking sequencer, and the Navigate page mute switch is stored in the
+`stopwatch` NVS namespace.
 Ambient and key lighting configuration is stored for protocol compatibility but
 is not rendered because Core2 has no equivalent per-key lighting hardware.
 

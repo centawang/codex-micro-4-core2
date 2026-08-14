@@ -167,6 +167,13 @@ Agent ID 为 `AG00` 至 `AG05`。默认 Command ID 为 `ACT06`、`ACT07`、
 固定的本地计时函数。环境灯光和按键灯光配置仅为协议兼容而保存，因为 Core2
 没有对应的逐键灯光硬件，所以不会进行渲染。
 
+主机通过颜色字段编码槽位状态：`0xFF6D00` 表示 `awaiting-approval` 或
+`awaiting-response`，`0x00FF4C` 表示 `unread`，`0x304FFE` 表示 `working`，
+`0xFFFFFF` 表示 `idle`，`0xFF0033` 表示 `error`，`0x000000` 表示未分配。
+当槽位刚进入待批准或未读颜色时，StopWatch 会蜂鸣三声；状态未变化则不会重复
+提示，两者同时出现时以待批准优先。蜂鸣由非阻塞状态机排程，Navigate 页面的
+静音开关保存在 `stopwatch` NVS 命名空间。
+
 ## 输入映射
 
 屏幕包含三个页面。可以使用底部标签或 Core2 的 A、B、C 触摸按钮切换页面。

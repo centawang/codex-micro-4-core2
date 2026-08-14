@@ -210,6 +210,12 @@ On StopWatch:
   encoder steps.
 - Press or hold the dial center for the normal dial press and 500 ms settings
   behavior.
+- The `ALERT`/`MUTED` switch controls the status beeps described below. The
+  choice is stored on the device.
+
+StopWatch beeps three times when any Agent starts waiting for approval or
+finishes with an unread result. It beeps only when a slot newly enters that
+status, so repeated host updates stay quiet.
 
 Mappings are selected in ChatGPT Desktop. Labels on the Core2 show the original
 default layout and do not change after host-side remapping.
