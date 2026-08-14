@@ -22,8 +22,9 @@ push-to-talk integration are handled by ChatGPT Desktop.
 
 - Six touchscreen Agent Keys with task status colors and breathing animation
 - Six default Command Keys: Fast, Approve, Decline, Fork, Mic, and Send
-- Four touchscreen directions on Core2/CoreS3 for analog-stick assignments
-- Continuous virtual joystick and rotary dial gestures on StopWatch
+- Continuous virtual joystick and rotary dial gestures
+- Three beeps when an Agent needs approval or finishes, with a mute switch
+- Swipe left or right to change pages
 - Dial counterclockwise, clockwise, press, and 500 ms hold behavior
 - ChatGPT Desktop command and direction remapping
 - Core2 battery reporting over BLE HID
@@ -194,15 +195,8 @@ captured or streamed by this firmware.
 
 ### Navigate page
 
-On Core2/CoreS3:
-
-- `UP`, `RIGHT`, `DOWN`, and `LEFT` emulate the four analog-stick directions.
-  Their sublabels show the host defaults: Plan mode, Forward, Sidebar, and Back.
-- `CCW` and `CW` emulate one dial step in each direction.
-- Tap `DIAL` to press the dial.
-- Hold `DIAL` for at least 500 ms to request Codex Micro settings.
-
-On StopWatch:
+All boards show a continuous virtual joystick, a touch rotary dial, and an
+`ALERT`/`MUTED` switch:
 
 - Drag the virtual joystick in any direction. Angle and distance are reported
   continuously, including partial travel between the center and outer ring.
@@ -213,7 +207,7 @@ On StopWatch:
 - The `ALERT`/`MUTED` switch controls the status beeps described below. The
   choice is stored on the device.
 
-StopWatch beeps three times when any Agent starts waiting for approval or
+The firmware beeps three times when any Agent starts waiting for approval or
 finishes with an unread result. It beeps only when a slot newly enters that
 status, so repeated host updates stay quiet.
 

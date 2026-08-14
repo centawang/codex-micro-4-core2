@@ -3,11 +3,15 @@
 
 #include <Arduino.h>
 #include <M5Unified.h>
+#include <Preferences.h>
 
 #include <cmath>
 
 #include "CodexMicroBle.h"
 #include "CoreAgentCardStyle.h"
+#include "StopWatchAlert.h"
+#include "StopWatchNavigateControl.h"
+#include "StopWatchSwipe.h"
 
 namespace {
 
@@ -16,13 +20,22 @@ constexpr char kBoardName[] = "CoreS3";
 // CoreS3's digitizer ends at the bottom of the panel, so M5Unified never
 // reports BtnA/BtnB/BtnC. Page switching relies on the on-screen tab bar.
 constexpr bool kHasBottomButtons = false;
+// CoreS3 has no vibration motor, so touches are confirmed with a short click.
+constexpr bool kHasVibration = false;
 #else
 constexpr char kBoardName[] = "Core2";
 constexpr bool kHasBottomButtons = true;
+constexpr bool kHasVibration = true;
 #endif
 
 enum class Page : uint8_t { Tasks, Commands, Navigate };
 enum class CommandIcon : uint8_t { Download, Approve, Reject, Fork, Mic, Send };
+enum class NavigateTouchMode : uint8_t {
+  None,
+  Joystick,
+  DialPress,
+  DialRotate,
+};
 
 struct TouchAction {
   const char* key = nullptr;
@@ -31,16 +44,21 @@ struct TouchAction {
   bool joystick = false;
   float angle = 0.0f;
   uint8_t modifier = 0;
+  int8_t pageIndex = -1;
+  bool muteToggle = false;
 
   TouchAction() = default;
   TouchAction(const char* keyValue, int8_t agentValue, bool encoderStepValue,
-              bool joystickValue, float angleValue, uint8_t modifierValue = 0)
+              bool joystickValue, float angleValue, uint8_t modifierValue = 0,
+              int8_t pageIndexValue = -1, bool muteToggleValue = false)
       : key(keyValue),
         agent(agentValue),
         encoderStep(encoderStepValue),
         joystick(joystickValue),
         angle(angleValue),
-        modifier(modifierValue) {}
+        modifier(modifierValue),
+        pageIndex(pageIndexValue),
+        muteToggle(muteToggleValue) {}
 };
 
 constexpr uint16_t kBackground = 0x0841;
@@ -52,6 +70,37 @@ constexpr uint16_t kAccent = 0x2E73;
 constexpr int kHeaderHeight = 30;
 constexpr int kTabHeight = 28;
 constexpr int kContentBottom = 240 - kTabHeight;
+
+constexpr int kNavigateCenterY = 118;
+constexpr int kJoystickCenterX = 68;
+constexpr int kJoystickRadius = 56;
+constexpr int kJoystickHandleRadius = 16;
+constexpr int kDialCenterX = 196;
+constexpr int kDialRadius = 56;
+constexpr int kDialPressRadius = 28;
+constexpr int kMuteSwitchX = 262;
+constexpr int kMuteSwitchY = 62;
+constexpr int kMuteSwitchWidth = 50;
+constexpr int kMuteSwitchHeight = 112;
+constexpr uint32_t kJoystickReportIntervalMs = 32;
+constexpr uint32_t kNavigateRedrawIntervalMs = 24;
+
+constexpr uint32_t kTouchActivationDelayMs = 90;
+constexpr int kTouchMoveCancelDistance = 12;
+constexpr int kSwipeMinimumDistance = 50;
+constexpr uint8_t kHapticStrength = 128;
+constexpr uint32_t kHapticDurationMs = 35;
+constexpr uint8_t kAlertBeepCount = 3;
+constexpr uint8_t kAlertVolume = 160;
+constexpr float kAlertToneHz = 2200.0f;
+constexpr uint32_t kAlertToneMs = 90;
+constexpr int kAlertChannel = 0;
+constexpr int kClickChannel = 1;
+constexpr uint8_t kClickVolume = 70;
+constexpr float kClickToneHz = 3400.0f;
+constexpr uint32_t kClickToneMs = 12;
+constexpr char kCorePreferencesNamespace[] = "codexcore";
+constexpr char kMutePreferenceKey[] = "mute";
 
 const char* kAgentKeys[] = {"AG00", "AG01", "AG02", "AG03", "AG04", "AG05"};
 // The host folds ACT10 into the double-width ACT10_ACT11 slot, which carries
@@ -72,6 +121,24 @@ bool touchActive = false;
 uint32_t lastDrawMs = 0;
 uint32_t lastBatteryMs = 0;
 
+NavigateTouchMode navigateTouchMode = NavigateTouchMode::None;
+codex_micro::StopWatchJoystickPosition joystickPosition;
+codex_micro::StopWatchDialGesture dialGesture;
+codex_micro::StopWatchBeepSequence beepSequence;
+float dialIndicatorAngle = -codex_micro::kStopWatchPi / 2.0f;
+float lastSentJoystickAngle = 0.0f;
+float lastSentJoystickDistance = -1.0f;
+uint32_t lastJoystickReportMs = 0;
+bool dialNeedsRebase = false;
+bool alertMuted = false;
+uint32_t hapticStartedMs = 0;
+bool hapticActive = false;
+TouchAction pendingTouchAction;
+uint32_t touchStartedMs = 0;
+bool touchGesturePending = false;
+bool touchGestureMoved = false;
+bool touchActionCommitted = false;
+
 uint16_t rgb888To565(uint32_t color, float brightness = 1.0f) {
   const uint8_t red = ((color >> 16) & 0xFF) * brightness;
   const uint8_t green = ((color >> 8) & 0xFF) * brightness;
@@ -84,6 +151,62 @@ void drawCentered(const char* text, int x, int y, int font = 1, uint16_t color =
   canvas.setTextSize(font);
   canvas.setTextColor(color);
   canvas.drawString(text, x, y);
+}
+
+// Core2 drives a motor here; CoreS3 has none, so it clicks instead.
+void startHaptic() {
+  if (kHasVibration) {
+    M5.Power.setVibration(kHapticStrength);
+    hapticStartedMs = millis();
+    hapticActive = true;
+    return;
+  }
+  if (!alertMuted) {
+    M5.Speaker.tone(kClickToneHz, kClickToneMs, kClickChannel, false);
+  }
+}
+
+void updateHaptic(uint32_t now) {
+  if (hapticActive && now - hapticStartedMs >= kHapticDurationMs) {
+    M5.Power.setVibration(0);
+    hapticActive = false;
+  }
+}
+
+void loadMutePreference() {
+  Preferences preferences;
+  if (!preferences.begin(kCorePreferencesNamespace, true)) {
+    return;
+  }
+  alertMuted = preferences.getBool(kMutePreferenceKey, false);
+  preferences.end();
+}
+
+void saveMutePreference() {
+  Preferences preferences;
+  if (!preferences.begin(kCorePreferencesNamespace, false)) {
+    return;
+  }
+  preferences.putBool(kMutePreferenceKey, alertMuted);
+  preferences.end();
+}
+
+void playAlertTone() {
+  M5.Speaker.tone(kAlertToneHz, kAlertToneMs, kAlertChannel);
+}
+
+void startAlert(codex_micro::StopWatchAlert alert, uint32_t now) {
+  Serial.printf("Alert %s%s\n",
+                alert == codex_micro::StopWatchAlert::NeedsApproval
+                    ? "needs-approval"
+                    : "completed",
+                alertMuted ? " (muted)" : "");
+  if (alertMuted) {
+    return;
+  }
+  if (beepSequence.start(now, kAlertBeepCount)) {
+    playAlertTone();
+  }
 }
 
 void drawHeader() {
@@ -259,20 +382,87 @@ void drawCommands() {
 }
 
 void drawNavigate() {
-  drawButton(18, 42, 70, 48, "UP", kAccent, touchActive && activeAction.joystick && activeAction.angle == 0.75f, "PLAN");
-  drawButton(18, 148, 70, 48, "DOWN", kAccent, touchActive && activeAction.joystick && activeAction.angle == 0.25f, "SIDEBAR");
-  drawButton(2, 95, 70, 48, "LEFT", kAccent, touchActive && activeAction.joystick && activeAction.angle == 0.5f, "BACK");
-  drawButton(76, 95, 70, 48, "RIGHT", kAccent, touchActive && activeAction.joystick && activeAction.angle == 0.0f, "FORWARD");
+  const bool joystickActive =
+      navigateTouchMode == NavigateTouchMode::Joystick;
 
-  drawButton(166, 42, 68, 64, "CCW", 0xFFE0,
-             touchActive && activeAction.key != nullptr && strcmp(activeAction.key, "ENC_CC") == 0,
-             "NEXT");
-  drawButton(244, 42, 68, 64, "CW", 0xFFE0,
-             touchActive && activeAction.key != nullptr && strcmp(activeAction.key, "ENC_CW") == 0,
-             "PREV");
-  drawButton(166, 118, 146, 78, "DIAL", 0xFFE0,
-             touchActive && activeAction.key != nullptr && strcmp(activeAction.key, "ENC") == 0,
-             "TAP / HOLD SETTINGS");
+  drawCentered("JOYSTICK", kJoystickCenterX, 48, 1, kMuted);
+  canvas.fillCircle(kJoystickCenterX, kNavigateCenterY, kJoystickRadius,
+                    kPanel);
+  canvas.drawCircle(kJoystickCenterX, kNavigateCenterY, kJoystickRadius,
+                    kAccent);
+  canvas.drawLine(kJoystickCenterX - kJoystickRadius + 8, kNavigateCenterY,
+                  kJoystickCenterX + kJoystickRadius - 8, kNavigateCenterY,
+                  0x4208);
+  canvas.drawLine(kJoystickCenterX, kNavigateCenterY - kJoystickRadius + 8,
+                  kJoystickCenterX, kNavigateCenterY + kJoystickRadius - 8,
+                  0x4208);
+  canvas.fillCircle(kJoystickCenterX, kNavigateCenterY - kJoystickRadius + 8, 2,
+                    kMuted);
+  canvas.fillCircle(kJoystickCenterX + kJoystickRadius - 8, kNavigateCenterY, 2,
+                    kMuted);
+  canvas.fillCircle(kJoystickCenterX, kNavigateCenterY + kJoystickRadius - 8, 2,
+                    kMuted);
+  canvas.fillCircle(kJoystickCenterX - kJoystickRadius + 8, kNavigateCenterY, 2,
+                    kMuted);
+
+  const float joystickRadians =
+      joystickPosition.angle * codex_micro::kStopWatchTwoPi;
+  const float handleTravel =
+      (kJoystickRadius - kJoystickHandleRadius - 5) *
+      (joystickActive ? joystickPosition.distance : 0.0f);
+  const int handleX =
+      kJoystickCenterX + static_cast<int>(cosf(joystickRadians) * handleTravel);
+  const int handleY =
+      kNavigateCenterY + static_cast<int>(sinf(joystickRadians) * handleTravel);
+  canvas.fillCircle(handleX, handleY, kJoystickHandleRadius,
+                    joystickActive ? kAccent : kPanelPressed);
+  canvas.drawCircle(handleX, handleY, kJoystickHandleRadius, kText);
+  canvas.fillCircle(handleX, handleY, 3, kText);
+
+  const bool dialPressed = navigateTouchMode == NavigateTouchMode::DialPress;
+  drawCentered("DIAL", kDialCenterX, 48, 1, kMuted);
+  canvas.fillCircle(kDialCenterX, kNavigateCenterY, kDialRadius, 0x1082);
+  for (int tick = 0; tick < 24; ++tick) {
+    const float angle = tick * codex_micro::kStopWatchTwoPi / 24.0f;
+    const int inner = tick % 3 == 0 ? kDialRadius - 9 : kDialRadius - 6;
+    canvas.drawLine(
+        kDialCenterX + static_cast<int>(cosf(angle) * inner),
+        kNavigateCenterY + static_cast<int>(sinf(angle) * inner),
+        kDialCenterX + static_cast<int>(cosf(angle) * (kDialRadius - 2)),
+        kNavigateCenterY + static_cast<int>(sinf(angle) * (kDialRadius - 2)),
+        tick % 3 == 0 ? 0xFFE0 : kMuted);
+  }
+  canvas.fillCircle(kDialCenterX, kNavigateCenterY, kDialRadius - 11, kPanel);
+  canvas.drawCircle(kDialCenterX, kNavigateCenterY, kDialRadius, 0xFFE0);
+  canvas.drawCircle(kDialCenterX, kNavigateCenterY, kDialRadius - 11, 0xFFE0);
+  canvas.drawLine(
+      kDialCenterX + static_cast<int>(cosf(dialIndicatorAngle) * 31),
+      kNavigateCenterY + static_cast<int>(sinf(dialIndicatorAngle) * 31),
+      kDialCenterX + static_cast<int>(cosf(dialIndicatorAngle) * 43),
+      kNavigateCenterY + static_cast<int>(sinf(dialIndicatorAngle) * 43),
+      kText);
+  canvas.fillCircle(kDialCenterX, kNavigateCenterY, kDialPressRadius,
+                    dialPressed ? 0xB5A0 : kPanelPressed);
+  canvas.drawCircle(kDialCenterX, kNavigateCenterY, kDialPressRadius,
+                    dialPressed ? kText : 0xFFE0);
+  drawCentered("PRESS", kDialCenterX, kNavigateCenterY, 1, kText);
+
+  const int trackRadius = kMuteSwitchWidth / 2;
+  drawCentered("ALERT", kMuteSwitchX + trackRadius, 48, 1, kMuted);
+  canvas.fillRoundRect(kMuteSwitchX, kMuteSwitchY, kMuteSwitchWidth,
+                       kMuteSwitchHeight, trackRadius,
+                       alertMuted ? kPanel : kAccent);
+  canvas.drawRoundRect(kMuteSwitchX, kMuteSwitchY, kMuteSwitchWidth,
+                       kMuteSwitchHeight, trackRadius,
+                       alertMuted ? kMuted : kText);
+  const int knobY = alertMuted
+                        ? kMuteSwitchY + kMuteSwitchHeight - trackRadius - 2
+                        : kMuteSwitchY + trackRadius + 2;
+  canvas.fillCircle(kMuteSwitchX + trackRadius, knobY, trackRadius - 6, kText);
+  drawCentered(alertMuted ? "MUTED" : "ON", kMuteSwitchX + trackRadius,
+               alertMuted ? kMuteSwitchY + trackRadius + 2
+                          : kMuteSwitchY + kMuteSwitchHeight - trackRadius - 2,
+               1, alertMuted ? kMuted : kText);
 }
 
 void drawScreen() {
@@ -300,9 +490,8 @@ bool inRect(int x, int y, int left, int top, int width, int height) {
 
 TouchAction actionAt(int x, int y) {
   if (y >= kContentBottom) {
-    page = static_cast<Page>(min(2, x / 106));
-    drawScreen();
-    return {};
+    return {nullptr, -1, false, false, 0.0f, 0,
+            static_cast<int8_t>(min(2, x / 106))};
   }
 
   if (page == Page::Tasks) {
@@ -326,13 +515,10 @@ TouchAction actionAt(int x, int y) {
       }
     }
   } else {
-    if (inRect(x, y, 18, 42, 70, 48)) return {nullptr, -1, false, true, 0.75f};
-    if (inRect(x, y, 18, 148, 70, 48)) return {nullptr, -1, false, true, 0.25f};
-    if (inRect(x, y, 2, 95, 70, 48)) return {nullptr, -1, false, true, 0.5f};
-    if (inRect(x, y, 76, 95, 70, 48)) return {nullptr, -1, false, true, 0.0f};
-    if (inRect(x, y, 166, 42, 68, 64)) return {"ENC_CC", -1, true, false, 0.0f};
-    if (inRect(x, y, 244, 42, 68, 64)) return {"ENC_CW", -1, true, false, 0.0f};
-    if (inRect(x, y, 166, 118, 146, 78)) return {"ENC", -1, false, false, 0.0f};
+    if (inRect(x, y, kMuteSwitchX, kMuteSwitchY, kMuteSwitchWidth,
+               kMuteSwitchHeight)) {
+      return {nullptr, -1, false, false, 0.0f, 0, -1, true};
+    }
   }
   return {};
 }
@@ -341,6 +527,8 @@ void pressAction(const TouchAction& action) {
   activeAction = action;
   touchActive = action.key != nullptr || action.joystick || action.modifier != 0;
   if (!touchActive) return;
+
+  startHaptic();
 
   if (action.modifier != 0) {
     codex.setModifier(action.modifier);
@@ -354,7 +542,7 @@ void pressAction(const TouchAction& action) {
   drawScreen();
 }
 
-void releaseAction() {
+void releaseAction(bool redraw = true) {
   if (!touchActive) return;
   if (activeAction.modifier != 0) {
     codex.setModifier(0);
@@ -365,7 +553,241 @@ void releaseAction() {
   }
   touchActive = false;
   activeAction = {};
+  if (redraw) {
+    drawScreen();
+  }
+}
+
+bool hasTouchAction(const TouchAction& action) {
+  return action.key != nullptr || action.joystick || action.modifier != 0 ||
+         action.pageIndex >= 0 || action.muteToggle;
+}
+
+void clearTouchGesture() {
+  pendingTouchAction = {};
+  touchGesturePending = false;
+  touchGestureMoved = false;
+  touchActionCommitted = false;
+}
+
+float joystickAngleDifference(float first, float second) {
+  const float difference = fabsf(first - second);
+  return difference > 0.5f ? 1.0f - difference : difference;
+}
+
+void updateJoystickTouch(int x, int y, uint32_t now, bool forceReport) {
+  const auto position = codex_micro::stopWatchJoystickPosition(
+      static_cast<float>(x), static_cast<float>(y), kJoystickCenterX,
+      kNavigateCenterY, kJoystickRadius);
+  joystickPosition = position;
+
+  const bool changed =
+      fabsf(position.distance - lastSentJoystickDistance) >= 0.01f ||
+      (position.distance > 0.02f &&
+       joystickAngleDifference(position.angle, lastSentJoystickAngle) >= 0.01f);
+  if (forceReport ||
+      (changed && now - lastJoystickReportMs >= kJoystickReportIntervalMs)) {
+    codex.sendJoystick(position.angle, position.distance);
+    lastSentJoystickAngle = position.angle;
+    lastSentJoystickDistance = position.distance;
+    lastJoystickReportMs = now;
+  }
+  if (forceReport || now - lastDrawMs >= kNavigateRedrawIntervalMs) {
+    drawScreen();
+  }
+}
+
+bool beginNavigateTouch(int x, int y, uint32_t now) {
+  const float touchX = static_cast<float>(x);
+  const float touchY = static_cast<float>(y);
+  if (codex_micro::stopWatchPointInCircle(touchX, touchY, kJoystickCenterX,
+                                          kNavigateCenterY, kJoystickRadius)) {
+    clearTouchGesture();
+    navigateTouchMode = NavigateTouchMode::Joystick;
+    startHaptic();
+    updateJoystickTouch(x, y, now, true);
+    return true;
+  }
+  if (!codex_micro::stopWatchPointInCircle(touchX, touchY, kDialCenterX,
+                                           kNavigateCenterY, kDialRadius)) {
+    return false;
+  }
+
+  clearTouchGesture();
+  if (codex_micro::stopWatchPointInCircle(touchX, touchY, kDialCenterX,
+                                          kNavigateCenterY,
+                                          kDialPressRadius)) {
+    navigateTouchMode = NavigateTouchMode::DialPress;
+    pressAction({"ENC", -1, false, false, 0.0f});
+  } else {
+    navigateTouchMode = NavigateTouchMode::DialRotate;
+    dialGesture.begin(touchX, touchY, kDialCenterX, kNavigateCenterY);
+    dialIndicatorAngle =
+        atan2f(touchY - kNavigateCenterY, touchX - kDialCenterX);
+    dialNeedsRebase = false;
+    drawScreen();
+  }
+  return true;
+}
+
+void finishNavigateTouch(bool redraw = true) {
+  const NavigateTouchMode mode = navigateTouchMode;
+  if (mode == NavigateTouchMode::None) {
+    return;
+  }
+  navigateTouchMode = NavigateTouchMode::None;
+  dialGesture.reset();
+  dialNeedsRebase = false;
+
+  if (mode == NavigateTouchMode::Joystick) {
+    codex.sendJoystick(joystickPosition.angle, 0.0f);
+    joystickPosition.distance = 0.0f;
+    lastSentJoystickDistance = 0.0f;
+  } else if (mode == NavigateTouchMode::DialPress) {
+    releaseAction(redraw);
+    return;
+  }
+  if (redraw) {
+    drawScreen();
+  }
+}
+
+void updateNavigateTouch(const m5::touch_detail_t& touch, uint32_t now) {
+  if (navigateTouchMode == NavigateTouchMode::None) {
+    return;
+  }
+  if (touch.isPressed()) {
+    if (navigateTouchMode == NavigateTouchMode::Joystick) {
+      updateJoystickTouch(touch.x, touch.y, now, false);
+    } else if (navigateTouchMode == NavigateTouchMode::DialRotate) {
+      const float touchX = static_cast<float>(touch.x);
+      const float touchY = static_cast<float>(touch.y);
+      if (codex_micro::stopWatchPointInCircle(touchX, touchY, kDialCenterX,
+                                              kNavigateCenterY,
+                                              kDialPressRadius)) {
+        dialNeedsRebase = true;
+        return;
+      }
+      if (dialNeedsRebase) {
+        dialGesture.begin(touchX, touchY, kDialCenterX, kNavigateCenterY);
+        dialNeedsRebase = false;
+      }
+      const int steps =
+          dialGesture.update(touchX, touchY, kDialCenterX, kNavigateCenterY);
+      dialIndicatorAngle =
+          atan2f(touchY - kNavigateCenterY, touchX - kDialCenterX);
+      if (steps != 0) {
+        const char* key = steps > 0 ? "ENC_CW" : "ENC_CC";
+        for (int step = 0; step < abs(steps); ++step) {
+          codex.sendKey(key, 2);
+        }
+        startHaptic();
+      }
+      if (now - lastDrawMs >= kNavigateRedrawIntervalMs) {
+        drawScreen();
+      }
+    }
+    return;
+  }
+  if (touch.wasReleased()) {
+    finishNavigateTouch();
+  }
+}
+
+void selectPage(int pageIndex) {
+  startHaptic();
+  finishNavigateTouch(false);
+  releaseAction(false);
+  page = static_cast<Page>(pageIndex);
   drawScreen();
+}
+
+void toggleMute() {
+  alertMuted = !alertMuted;
+  if (alertMuted) {
+    beepSequence.stop();
+  }
+  saveMutePreference();
+  startHaptic();
+  drawScreen();
+}
+
+void triggerTouchAction(const TouchAction& action) {
+  if (action.pageIndex >= 0) {
+    selectPage(action.pageIndex);
+  } else if (action.muteToggle) {
+    toggleMute();
+  } else {
+    pressAction(action);
+  }
+}
+
+void changePage(int delta) {
+  const int pageCount = 3;
+  const int next = (static_cast<int>(page) + delta + pageCount) % pageCount;
+  clearTouchGesture();
+  startHaptic();
+  finishNavigateTouch(false);
+  releaseAction(false);
+  page = static_cast<Page>(next);
+  drawScreen();
+}
+
+void beginTouchGesture(const TouchAction& action, uint32_t now) {
+  pendingTouchAction = action;
+  touchStartedMs = now;
+  touchGesturePending = true;
+  touchGestureMoved = false;
+  touchActionCommitted = false;
+}
+
+void updateTouchGesture(const m5::touch_detail_t& touch, uint32_t now) {
+  if (!touchGesturePending) {
+    return;
+  }
+
+  if (touch.isPressed()) {
+    if (!touchGestureMoved &&
+        (abs(touch.distanceX()) > kTouchMoveCancelDistance ||
+         abs(touch.distanceY()) > kTouchMoveCancelDistance)) {
+      touchGestureMoved = true;
+      if (touchActionCommitted) {
+        releaseAction();
+      }
+    }
+
+    if (!touchGestureMoved && !touchActionCommitted &&
+        pendingTouchAction.pageIndex < 0 && !pendingTouchAction.muteToggle &&
+        now - touchStartedMs >= kTouchActivationDelayMs) {
+      triggerTouchAction(pendingTouchAction);
+      touchActionCommitted = true;
+    }
+    return;
+  }
+
+  if (!touch.wasReleased()) {
+    return;
+  }
+
+  const TouchAction action = pendingTouchAction;
+  const bool moved = touchGestureMoved;
+  const bool committed = touchActionCommitted;
+  const int8_t swipeDelta = codex_micro::stopWatchSwipePageDelta(
+      touch.distanceX(), touch.distanceY(), kSwipeMinimumDistance);
+  clearTouchGesture();
+
+  if (committed) {
+    releaseAction();
+  }
+  if (swipeDelta != 0) {
+    changePage(swipeDelta);
+  } else if (!moved && !committed && hasTouchAction(action)) {
+    triggerTouchAction(action);
+    if (touchActive) {
+      delay(8);
+      releaseAction();
+    }
+  }
 }
 
 void updateBattery() {
@@ -391,9 +813,13 @@ void setup() {
   auto config = M5.config();
   config.clear_display = true;
   M5.begin(config);
+  M5.Power.setVibration(0);
   M5.Display.setRotation(1);
   M5.Display.setBrightness(120);
   M5.Display.setTextWrap(false);
+  M5.Speaker.setVolume(kAlertVolume);
+  M5.Speaker.setChannelVolume(kClickChannel, kClickVolume);
+  loadMutePreference();
 
   canvas.setColorDepth(16);
   if (canvas.createSprite(M5.Display.width(), M5.Display.height()) == nullptr) {
@@ -418,31 +844,43 @@ void loop() {
   codex.poll();
   const auto touch = M5.Touch.getDetail();
   if (touch.wasPressed()) {
-    pressAction(actionAt(touch.x, touch.y));
+    const uint32_t touchNow = millis();
+    if (page != Page::Navigate ||
+        !beginNavigateTouch(touch.x, touch.y, touchNow)) {
+      beginTouchGesture(actionAt(touch.x, touch.y), touchNow);
+    }
   }
-  if (touch.wasReleased()) {
-    releaseAction();
+  if (navigateTouchMode != NavigateTouchMode::None) {
+    updateNavigateTouch(touch, millis());
+  } else {
+    updateTouchGesture(touch, millis());
   }
 
   if (kHasBottomButtons) {
     if (M5.BtnA.wasPressed()) {
-      page = Page::Tasks;
-      drawScreen();
+      selectPage(0);
     } else if (M5.BtnB.wasPressed()) {
-      page = Page::Commands;
-      drawScreen();
+      selectPage(1);
     } else if (M5.BtnC.wasPressed()) {
-      page = Page::Navigate;
-      drawScreen();
+      selectPage(2);
     }
   }
 
   CodexMicroState latest = codex.snapshot();
+  const codex_micro::StopWatchAlert alert =
+      codex_micro::stopWatchAlertForChange(state.threads, latest.threads);
   if (latest.dirty || latest.connected != state.connected) {
     state = latest;
     drawScreen();
   } else {
     state = latest;
+  }
+
+  if (alert != codex_micro::StopWatchAlert::None) {
+    startAlert(alert, millis());
+  }
+  if (beepSequence.update(millis())) {
+    playAlertTone();
   }
 
   if (page == Page::Tasks && millis() - lastDrawMs > 80) {
@@ -453,6 +891,7 @@ void loop() {
     if (animated) drawScreen();
   }
 
+  updateHaptic(millis());
   updateBattery();
   delay(8);
 }

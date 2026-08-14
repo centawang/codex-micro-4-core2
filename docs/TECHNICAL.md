@@ -182,11 +182,12 @@ but the current breathing animation uses a fixed local timing function.
 The host encodes slot state in the color field. `0xFF6D00` marks
 `awaiting-approval` or `awaiting-response`, `0x00FF4C` marks `unread`,
 `0x304FFE` marks `working`, `0xFFFFFF` marks `idle`, `0xFF0033` marks `error`,
-and `0x000000` marks an unassigned slot. StopWatch beeps three times when a slot
-newly enters the approval or unread color, so an unchanged slot never repeats
-the sound. Approval wins when both appear in one update. The beeps are paced by
-a non-blocking sequencer, and the Navigate page mute switch is stored in the
-`stopwatch` NVS namespace.
+and `0x000000` marks an unassigned slot. Every board beeps three times when a
+slot newly enters the approval or unread color, so an unchanged slot never
+repeats the sound. Approval wins when both appear in one update. The beeps are
+paced by a non-blocking sequencer, and the Navigate page mute switch is stored
+in the `codexcore` NVS namespace on Core2/CoreS3 and the `stopwatch` namespace
+on StopWatch.
 Ambient and key lighting configuration is stored for protocol compatibility but
 is not rendered because Core2 has no equivalent per-key lighting hardware.
 
@@ -249,11 +250,15 @@ restarts the inactivity timer and restores the display if it was dimmed.
 
 Core2/CoreS3 touch hit areas are fixed for the 320 x 240 landscape orientation;
 StopWatch hit areas scale from its 468 x 468 design space. Press and release
-events are sent for Agent Keys, Command Keys, and dial presses. On StopWatch,
+events are sent for Agent Keys, Command Keys, and dial presses. On every board,
 the virtual joystick captures motion inside its control and reports normalized
 angle and distance at most once every 32 ms. The dial outer ring accumulates
 angular movement into 24 encoder steps per revolution; its center preserves the
-normal dial press/release and host-side hold behavior.
+normal dial press/release and host-side hold behavior. Horizontal swipes change
+pages, using a 50-pixel threshold on Core2/CoreS3 and 70 pixels on StopWatch.
+Core2 and StopWatch confirm valid touches with a 35 ms vibration pulse. CoreS3
+has no motor, so it plays a 12 ms click on a separate speaker channel instead;
+the Navigate page mute switch silences that click along with the alert beeps.
 
 The Core2/CoreS3 touch UI does not implement double-click timing or the 500 ms
 settings hold locally; ChatGPT Desktop interprets those press/release sequences.
@@ -335,9 +340,7 @@ app before publishing a firmware release.
 - One connected host at a time
 - No user-selectable Bluetooth slots
 - No conventional keyboard keys or text input
-- Core2/CoreS3 use digital four-direction input instead of a continuous stick
-- No physical encoder; StopWatch rotation uses a touch ring
-- No ambient or per-key LEDs
+- No physical encoder; rotation uses an on-screen touch ring- No ambient or per-key LEDs
 - No extra Work Louder layers or Work Louder configuration support
 - No over-the-air updater or rollback mechanism
 - No automatic UI label update after host-side command remapping
