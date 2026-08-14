@@ -150,10 +150,14 @@ pages. CoreS3's digitizer stops at the bottom edge of the panel, so it has no
 equivalent hardware buttons; use the on-screen tab bar instead.
 
 StopWatch exposes the same three pages on its 466 x 466 round AMOLED. Use the
-on-screen tabs or the yellow/blue hardware buttons to move to the previous/next
-page. All Agent, Command, direction, and dial controls remain touch-driven and
-are rearranged for the round safe area. Valid touch actions and hardware page
-buttons provide a short vibration confirmation.
+on-screen tabs to move between pages. Single-click the yellow button for Mic or
+double-click it within 350 ms for the previous page. Single-click the blue
+button for Enter or double-click it for the next page. All Agent, Command,
+direction, and dial controls remain touch-driven and are rearranged for the
+round safe area. Swipe left anywhere on the screen for the next page or right
+for the previous page; controls under a swipe are cancelled rather than fired.
+Valid touch actions, swipes, and hardware button actions provide a short
+vibration confirmation.
 
 ### Tasks page
 

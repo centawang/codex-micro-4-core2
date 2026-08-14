@@ -9,6 +9,8 @@
 #include "StickS3ButtonController.h"
 #include "StickS3PowerController.h"
 #include "StickS3ScreenFlash.h"
+#include "StopWatchButtonController.h"
+#include "StopWatchSwipe.h"
 
 namespace {
 
@@ -17,6 +19,8 @@ using codex_micro::StickS3ButtonController;
 using codex_micro::StickS3PowerAction;
 using codex_micro::StickS3PowerController;
 using codex_micro::StickS3ScreenFlash;
+using codex_micro::StopWatchButtonAction;
+using codex_micro::StopWatchButtonController;
 
 struct FakeAgentStatus {
   uint32_t color = 0;
@@ -44,6 +48,75 @@ void expectPowerAction(StickS3PowerAction actual,
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(expected),
                           static_cast<uint8_t>(actual));
 }
+
+void expectStopWatchAction(StopWatchButtonAction actual,
+                           StopWatchButtonAction expected) {
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(expected),
+                          static_cast<uint8_t>(actual));
+}
+
+void testStopWatchButtonSingleAndDoubleClicks() {
+  StopWatchButtonController buttons;
+
+  expectStopWatchAction(buttons.onButtonAReleased(100),
+                        StopWatchButtonAction::None);
+  expectStopWatchAction(buttons.pollButtonA(451, false),
+                        StopWatchButtonAction::ButtonASingle);
+
+  expectStopWatchAction(buttons.onButtonAReleased(1000),
+                        StopWatchButtonAction::None);
+  expectStopWatchAction(buttons.onButtonAReleased(1350),
+                        StopWatchButtonAction::ButtonADouble);
+
+  expectStopWatchAction(buttons.onButtonBReleased(2000),
+                        StopWatchButtonAction::None);
+  expectStopWatchAction(buttons.pollButtonB(2351, false),
+                        StopWatchButtonAction::ButtonBSingle);
+
+  expectStopWatchAction(buttons.onButtonBReleased(3000),
+                        StopWatchButtonAction::None);
+  expectStopWatchAction(buttons.onButtonBReleased(3350),
+                        StopWatchButtonAction::ButtonBDouble);
+}
+
+void testStopWatchSingleClickWaitsWhileSecondPressIsHeld() {
+  StopWatchButtonController buttons;
+
+  buttons.onButtonAReleased(100);
+  expectStopWatchAction(buttons.pollButtonA(1000, true),
+                        StopWatchButtonAction::None);
+  expectStopWatchAction(buttons.onButtonAReleased(1001),
+                        StopWatchButtonAction::ButtonASingle);
+  expectStopWatchAction(buttons.pollButtonA(1352, false),
+                        StopWatchButtonAction::ButtonASingle);
+}
+
+void testStopWatchButtonTimersSurviveMillisRollover() {
+  StopWatchButtonController buttons;
+  constexpr uint32_t release = UINT32_MAX - 100;
+
+  buttons.onButtonBReleased(release);
+  expectStopWatchAction(buttons.pollButtonB(249, false),
+                        StopWatchButtonAction::None);
+  expectStopWatchAction(buttons.pollButtonB(250, false),
+                        StopWatchButtonAction::ButtonBSingle);
+}
+
+            void testStopWatchHorizontalSwipesMapToPageDirection() {
+              TEST_ASSERT_EQUAL_INT8(
+                1, codex_micro::stopWatchSwipePageDelta(-90, 12));
+              TEST_ASSERT_EQUAL_INT8(
+                -1, codex_micro::stopWatchSwipePageDelta(90, -12));
+            }
+
+            void testStopWatchSwipeRejectsShortAndVerticalMotion() {
+              TEST_ASSERT_EQUAL_INT8(
+                0, codex_micro::stopWatchSwipePageDelta(69, 0));
+              TEST_ASSERT_EQUAL_INT8(
+                0, codex_micro::stopWatchSwipePageDelta(80, 90));
+              TEST_ASSERT_EQUAL_INT8(
+                0, codex_micro::stopWatchSwipePageDelta(-80, 80));
+            }
 
 void testButtonASingleClickSendsEnterAfterWindow() {
   StickS3ButtonController buttons;
@@ -515,6 +588,11 @@ void tearDown() {}
 
 int main(int, char**) {
   UNITY_BEGIN();
+  RUN_TEST(testStopWatchButtonSingleAndDoubleClicks);
+  RUN_TEST(testStopWatchSingleClickWaitsWhileSecondPressIsHeld);
+  RUN_TEST(testStopWatchButtonTimersSurviveMillisRollover);
+  RUN_TEST(testStopWatchHorizontalSwipesMapToPageDirection);
+  RUN_TEST(testStopWatchSwipeRejectsShortAndVerticalMotion);
   RUN_TEST(testButtonASingleClickSendsEnterAfterWindow);
   RUN_TEST(testButtonADoubleClickAtBoundarySendsRightAltOnly);
   RUN_TEST(testZeroDoubleClickWindowOnlyAcceptsSameTimestamp);

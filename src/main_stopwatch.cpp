@@ -8,6 +8,8 @@
 
 #include "CodexMicroBle.h"
 #include "CoreAgentCardStyle.h"
+#include "StopWatchButtonController.h"
+#include "StopWatchSwipe.h"
 
 #if !defined(CODEX_MICRO_STOPWATCH)
 #error "main_stopwatch.cpp is only for the m5stack-stopwatch environment"
@@ -25,17 +27,19 @@ struct TouchAction {
   bool joystick = false;
   float angle = 0.0f;
   uint8_t modifier = 0;
+  int8_t pageIndex = -1;
 
   TouchAction() = default;
   TouchAction(const char* keyValue, int8_t agentValue, bool encoderStepValue,
               bool joystickValue, float angleValue,
-              uint8_t modifierValue = 0)
+              uint8_t modifierValue = 0, int8_t pageIndexValue = -1)
       : key(keyValue),
         agent(agentValue),
         encoderStep(encoderStepValue),
         joystick(joystickValue),
         angle(angleValue),
-        modifier(modifierValue) {}
+        modifier(modifierValue),
+        pageIndex(pageIndexValue) {}
 };
 
 constexpr uint16_t kBackground = 0x0841;
@@ -48,6 +52,9 @@ constexpr uint16_t kConnected = 0x07E0;
 constexpr uint16_t kDisconnected = 0xF800;
 constexpr uint8_t kHapticStrength = 128;
 constexpr uint32_t kHapticDurationMs = 35;
+constexpr uint32_t kTouchActivationDelayMs = 90;
+constexpr int kTouchMoveCancelDistance = 16;
+constexpr int kSwipeMinimumDistance = 70;
 constexpr int kDesignSize = 468;
 constexpr int kHeaderCenterY = 46;
 constexpr int kTabY = 401;
@@ -77,6 +84,7 @@ constexpr int kMicCommandIndex = 4;
 CodexMicroBle codex;
 CodexMicroState state;
 M5Canvas canvas(&M5.Display);
+codex_micro::StopWatchButtonController physicalButtons;
 Page page = Page::Tasks;
 TouchAction activeAction;
 bool touchActive = false;
@@ -84,6 +92,11 @@ uint32_t lastDrawMs = 0;
 uint32_t lastBatteryMs = 0;
 uint32_t hapticStartedMs = 0;
 bool hapticActive = false;
+TouchAction pendingTouchAction;
+uint32_t touchStartedMs = 0;
+bool touchGesturePending = false;
+bool touchGestureMoved = false;
+bool touchActionCommitted = false;
 
 int scaleX(int value) {
   return value * canvas.width() / kDesignSize;
@@ -351,10 +364,8 @@ TouchAction actionAt(int x, int y) {
   for (int index = 0; index < 3; ++index) {
     const int tabX = kTabX + index * (kTabWidth + kTabGap);
     if (inRect(x, y, tabX, kTabY, kTabWidth, kTabHeight)) {
-      startHaptic();
-      page = static_cast<Page>(index);
-      drawScreen();
-      return {};
+      return {nullptr, -1, false, false, 0.0f, 0,
+              static_cast<int8_t>(index)};
     }
   }
 
@@ -442,14 +453,123 @@ void releaseAction() {
   drawScreen();
 }
 
+bool hasTouchAction(const TouchAction& action) {
+  return action.key != nullptr || action.joystick || action.modifier != 0 ||
+         action.pageIndex >= 0;
+}
+
+void clearTouchGesture() {
+  pendingTouchAction = {};
+  touchGesturePending = false;
+  touchGestureMoved = false;
+  touchActionCommitted = false;
+}
+
+void selectPage(int pageIndex) {
+  startHaptic();
+  releaseAction();
+  page = static_cast<Page>(pageIndex);
+  drawScreen();
+}
+
+void triggerTouchAction(const TouchAction& action) {
+  if (action.pageIndex >= 0) {
+    selectPage(action.pageIndex);
+  } else {
+    pressAction(action);
+  }
+}
+
 void changePage(int delta) {
   const int pageCount = 3;
   const int next =
       (static_cast<int>(page) + delta + pageCount) % pageCount;
+  clearTouchGesture();
   startHaptic();
   releaseAction();
   page = static_cast<Page>(next);
   drawScreen();
+}
+
+void beginTouchGesture(const TouchAction& action, uint32_t now) {
+  pendingTouchAction = action;
+  touchStartedMs = now;
+  touchGesturePending = true;
+  touchGestureMoved = false;
+  touchActionCommitted = false;
+}
+
+void updateTouchGesture(const m5::touch_detail_t& touch, uint32_t now) {
+  if (!touchGesturePending) {
+    return;
+  }
+
+  if (touch.isPressed()) {
+    const int distanceX = touch.distanceX();
+    const int distanceY = touch.distanceY();
+    if (!touchGestureMoved &&
+        (abs(distanceX) > kTouchMoveCancelDistance ||
+         abs(distanceY) > kTouchMoveCancelDistance)) {
+      touchGestureMoved = true;
+      if (touchActionCommitted) {
+        releaseAction();
+      }
+    }
+
+    if (!touchGestureMoved && !touchActionCommitted &&
+        pendingTouchAction.pageIndex < 0 &&
+        now - touchStartedMs >= kTouchActivationDelayMs) {
+      triggerTouchAction(pendingTouchAction);
+      touchActionCommitted = true;
+    }
+    return;
+  }
+
+  if (!touch.wasReleased()) {
+    return;
+  }
+
+  const TouchAction action = pendingTouchAction;
+  const bool moved = touchGestureMoved;
+  const bool committed = touchActionCommitted;
+  const int8_t swipeDelta = codex_micro::stopWatchSwipePageDelta(
+      touch.distanceX(), touch.distanceY(), kSwipeMinimumDistance);
+  clearTouchGesture();
+
+  if (committed) {
+    releaseAction();
+  }
+  if (swipeDelta != 0) {
+    changePage(swipeDelta);
+  } else if (!moved && !committed && hasTouchAction(action)) {
+    triggerTouchAction(action);
+    if (touchActive) {
+      delay(8);
+      releaseAction();
+    }
+  }
+}
+
+void handlePhysicalButtonAction(
+    codex_micro::StopWatchButtonAction action) {
+  switch (action) {
+    case codex_micro::StopWatchButtonAction::ButtonASingle:
+      startHaptic();
+      codex.sendRightAlt();
+      break;
+    case codex_micro::StopWatchButtonAction::ButtonADouble:
+      changePage(-1);
+      break;
+    case codex_micro::StopWatchButtonAction::ButtonBSingle:
+      startHaptic();
+      codex.sendEnter();
+      break;
+    case codex_micro::StopWatchButtonAction::ButtonBDouble:
+      changePage(1);
+      break;
+    case codex_micro::StopWatchButtonAction::None:
+      break;
+  }
 }
 
 void updateBattery() {
@@ -513,18 +633,24 @@ void loop() {
 
   const auto touch = M5.Touch.getDetail();
   if (touch.wasPressed()) {
-    pressAction(actionAt(touch.x, touch.y));
+    beginTouchGesture(actionAt(touch.x, touch.y), millis());
   }
-  if (touch.wasReleased()) {
-    releaseAction();
+  updateTouchGesture(touch, millis());
+
+  if (M5.BtnA.wasReleased()) {
+    handlePhysicalButtonAction(
+        physicalButtons.onButtonAReleased(millis()));
+  }
+  if (M5.BtnB.wasReleased()) {
+    handlePhysicalButtonAction(
+        physicalButtons.onButtonBReleased(millis()));
   }
 
-  if (M5.BtnA.wasPressed()) {
-    changePage(-1);
-  }
-  if (M5.BtnB.wasPressed()) {
-    changePage(1);
-  }
+  const uint32_t buttonNow = millis();
+  handlePhysicalButtonAction(
+      physicalButtons.pollButtonA(buttonNow, M5.BtnA.isPressed()));
+  handlePhysicalButtonAction(
+      physicalButtons.pollButtonB(buttonNow, M5.BtnB.isPressed()));
 
   CodexMicroState latest = codex.snapshot();
   if (latest.dirty || latest.connected != state.connected) {

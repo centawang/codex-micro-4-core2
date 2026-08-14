@@ -191,8 +191,16 @@ is the only page control.
 StopWatch uses a dedicated 468 x 468 design coordinate system on its round
 CO5300 AMOLED. The six Agent and Command controls use a two-column by three-row
 grid inside the circular safe area; Navigate uses a radial direction layout.
-The yellow/blue physical buttons (`M5.BtnA`/`M5.BtnB`, GPIO 2/1) move between
-pages, while the CST820 touch controller drives all actions.
+The yellow/blue physical buttons (`M5.BtnA`/`M5.BtnB`, GPIO 2/1) use a 350 ms
+double-click window. Yellow single-click taps Right Alt for Mic and double-click
+moves to the previous page. Blue single-click taps Enter and double-click moves
+to the next page. The CST820 touch controller drives all on-screen actions.
+
+Horizontal swipes use a 70-pixel minimum distance and require horizontal motion
+to exceed vertical motion. Left advances one page and right moves back. Touch
+actions wait 90 ms before press dispatch; movement beyond 16 pixels cancels the
+candidate control, preventing a swipe that starts over a button from emitting
+its HID action. A quick tap dispatches its press/release pair on touch release.
 
 Valid touch actions, on-screen tab changes, and physical page buttons trigger
 a 35 ms vibration pulse at level 128/255. `M5.Power.setVibration()` drives the
