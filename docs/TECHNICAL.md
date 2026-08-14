@@ -13,6 +13,8 @@ The firmware has two main layers:
 1. `src/main.cpp` owns the Core2/CoreS3 display, touch hit testing, page state,
    battery polling, and render loop. `src/main_sticks3.cpp` provides a separate
    Tasks-only entry point for the smaller StickS3 display and two buttons.
+   `src/main_stopwatch.cpp` carries the full three-page UI onto the round
+   StopWatch display.
 2. `src/CodexMicroBle.cpp` owns BLE setup, the HID descriptor, report framing,
    JSON parsing, host request handling, and notifications sent to the host.
 
@@ -43,11 +45,11 @@ The PlatformIO environment is intentionally small:
 | Setting | Value |
 | --- | --- |
 | Platform | `espressif32@6.13.0` |
-| Board | `m5stack-core2`, `m5stack-cores3`, or generic `esp32-s3-devkitc-1` configured for StickS3 |
+| Board | `m5stack-core2`, `m5stack-cores3`, generic `esp32-s3-devkitc-1` for StickS3, or `esp32s3box` configured for StopWatch |
 | Framework | Arduino |
 | Serial monitor | 115200 baud |
-| Upload speed | 1,500,000 baud (Core2), 921,600 baud (CoreS3) |
-| Display and hardware library | `M5Unified ^0.2.7` |
+| Upload speed | 1,500,000 baud (Core2), 921,600 baud (ESP32-S3 targets) |
+| Display and hardware library | `M5Unified ^0.2.7`; current Git versions of M5Unified/M5GFX/M5PM1/M5IOE1 for StopWatch autodetection |
 | JSON library | `ArduinoJson ^6.21.5` |
 
 The current transport relies on the Arduino-ESP32 2.x BLE HID implementation
@@ -153,7 +155,7 @@ Directional angles are normalized turns rather than radians:
 
 | Method | Behavior |
 | --- | --- |
-| `sys.version` | Returns `0.1.0-core2`, `0.1.0-cores3`, or `0.1.0-sticks3` |
+| `sys.version` | Returns `0.1.0-core2`, `0.1.0-cores3`, `0.1.0-sticks3`, or `0.1.0-stopwatch` |
 | `device.status` | Returns version, profile, layer, battery, and charging state |
 | `v.oai.thstatus` | Updates one or more of the six Agent status lights |
 | `v.oai.rgbcfg` | Stores host ambient and key lighting configuration |
@@ -186,6 +188,18 @@ and from Core2's A, B, and C touch buttons. CoreS3's digitizer covers only the
 320 x 240 panel, so M5Unified never reports those buttons there and the tab bar
 is the only page control.
 
+StopWatch uses a dedicated 468 x 468 design coordinate system on its round
+CO5300 AMOLED. The six Agent and Command controls use a two-column by three-row
+grid inside the circular safe area; Navigate uses a radial direction layout.
+The yellow/blue physical buttons (`M5.BtnA`/`M5.BtnB`, GPIO 2/1) move between
+pages, while the CST820 touch controller drives all actions.
+
+Valid touch actions, on-screen tab changes, and physical page buttons trigger
+a 35 ms vibration pulse at level 128/255. `M5.Power.setVibration()` drives the
+StopWatch motor through M5IOE1 PWM1. Pulse shutdown is handled from `loop()`
+using wrap-safe elapsed-time arithmetic, so haptics never delay BLE processing
+or HID release reports. Touches outside active controls do not vibrate.
+
 The StickS3 entry point has no touch pages. It renders all six Agent states as
 a vertical list. Its default mappings advance the highlight with a single
 `BtnB` click, move it back with a double-click within 350 ms, activate the
@@ -215,9 +229,10 @@ Each timeout accepts `0` (disabled) through 604800 seconds (seven days).
 Settings are stored in the `stick-power` NVS namespace. Applying new values
 restarts the inactivity timer and restores the display if it was dimmed.
 
-Touch hit areas are fixed for the 320 x 240 landscape orientation. Press and
-release events are sent for Agent Keys, Command Keys, directional controls, and
-the dial press. Dial rotation controls send one encoder-step action immediately.
+Core2/CoreS3 touch hit areas are fixed for the 320 x 240 landscape orientation;
+StopWatch hit areas scale from its 468 x 468 design space. Press and release
+events are sent for Agent Keys, Command Keys, directional controls, and the dial
+press. Dial rotation controls send one encoder-step action immediately.
 
 The Core2/CoreS3 touch UI does not implement double-click timing or the 500 ms
 settings hold locally; ChatGPT Desktop interprets those press/release sequences.
@@ -243,6 +258,9 @@ direct display rendering. If allocation fails, the firmware stops and displays
 
 Task status with a `breath` effect is redrawn approximately every 80 ms. Other
 screens redraw on input, connection changes, or host state changes.
+StopWatch uses the same full-frame pipeline with a 468 x 468 PSRAM-backed
+sprite. M5Unified auto-detects `board_M5StopWatch` via CST820, M5PM1, and M5IOE1
+on GPIO 47/48, then configures the QSPI CO5300 panel and power rails.
 The StickS3 build uses the same double-buffered pipeline at its native 135 x 240
 portrait resolution.
 

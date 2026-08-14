@@ -3,8 +3,8 @@
 [简体中文](README.zh-CN.md)
 
 An independent, open-source compatibility firmware that turns an M5Stack
-Core2, CoreS3, or StickS3 into a Bluetooth controller for Codex Micro features
-in the ChatGPT desktop app.
+Core2, CoreS3, StickS3, or StopWatch into a Bluetooth controller for Codex
+Micro features in the ChatGPT desktop app.
 
 The firmware presents the Core2 as a BLE vendor HID device and provides a
 touchscreen interface for six Agent Keys, six Command Keys, four analog-stick
@@ -27,6 +27,7 @@ remapping, and push-to-talk integration are handled by ChatGPT Desktop.
 - Core2 battery reporting over BLE HID
 - Automatic BLE advertising after disconnection
 - Flicker-free 320 x 240 interface using a full-screen, PSRAM-backed `M5Canvas`
+- Dedicated 468 x 468 round AMOLED interface for M5Stack StopWatch
 
 This is a vendor-control surface, not a general-purpose Bluetooth keyboard.
 
@@ -34,7 +35,7 @@ This is a vendor-control surface, not a general-purpose Bluetooth keyboard.
 
 | Component | Supported or tested state |
 | --- | --- |
-| Hardware | M5Stack Core2 tested on physical hardware; CoreS3 and the Tasks-only StickS3 target have dedicated build environments |
+| Hardware | M5Stack Core2, CoreS3, StickS3, and StopWatch have dedicated build environments; StopWatch hardware was identified and build-tested on a physical unit |
 | Host OS | macOS tested |
 | Host app | ChatGPT Desktop with Codex Micro support |
 | Transport | Bluetooth Low Energy HID only |
@@ -46,7 +47,7 @@ control, and Work Louder Input have not been validated.
 
 ## Requirements
 
-- M5Stack Core2, CoreS3, or StickS3
+- M5Stack Core2, CoreS3, StickS3, or StopWatch
 - A data-capable USB-C cable for flashing
 - [PlatformIO Core](https://docs.platformio.org/en/latest/core/index.html) or
   the PlatformIO IDE extension
@@ -55,8 +56,9 @@ control, and Work Louder Input have not been validated.
 
 ## Build and flash
 
-The project defines three PlatformIO environments. `m5stack-cores3` is the
-default; pass `-e m5stack-core2` or `-e m5stack-sticks3` for another target.
+The project defines four PlatformIO environments. `m5stack-cores3` is the
+default; pass `-e m5stack-core2`, `-e m5stack-sticks3`, or
+`-e m5stack-stopwatch` for another target.
 
 Clone the repository and run:
 
@@ -72,6 +74,20 @@ For the Tasks-only StickS3 firmware, use:
 pio run -e m5stack-sticks3
 pio run -e m5stack-sticks3 --target upload
 ```
+
+For the round-screen StopWatch firmware, use:
+
+```sh
+pio run -e m5stack-stopwatch
+pio run -e m5stack-stopwatch --target upload
+```
+
+To enter StopWatch download mode, connect USB-C, hold the power button for
+about two seconds until the green LED lights, then release it. The target uses
+16 MB Flash, OPI PSRAM, and M5Unified's built-in CO5300/CST820/M5PM1 support.
+The official M5Burner **StopWatch User Demo** or the
+[M5StopWatch-UserDemo](https://github.com/m5stack/M5StopWatch-UserDemo)
+repository can restore the factory firmware.
 
 PlatformIO installs the pinned ESP32 platform and the declared Arduino
 libraries automatically. The serial monitor runs at `115200` baud. A successful
@@ -132,6 +148,12 @@ this Core2 firmware.
 Core2's bottom A, B, and C touch buttons switch directly between the three
 pages. CoreS3's digitizer stops at the bottom edge of the panel, so it has no
 equivalent hardware buttons; use the on-screen tab bar instead.
+
+StopWatch exposes the same three pages on its 466 x 466 round AMOLED. Use the
+on-screen tabs or the yellow/blue hardware buttons to move to the previous/next
+page. All Agent, Command, direction, and dial controls remain touch-driven and
+are rearranged for the round safe area. Valid touch actions and hardware page
+buttons provide a short vibration confirmation.
 
 ### Tasks page
 

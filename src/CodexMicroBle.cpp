@@ -12,7 +12,9 @@ namespace {
 
 constexpr char kDeviceName[] = "Codex Micro";
 constexpr char kManufacturer[] = "Work Louder";
-#if defined(CODEX_MICRO_STICKS3)
+#if defined(CODEX_MICRO_STOPWATCH)
+constexpr char kFirmwareVersion[] = "0.1.0-stopwatch";
+#elif defined(CODEX_MICRO_STICKS3)
 constexpr char kFirmwareVersion[] = "0.1.0-sticks3";
 #elif defined(ARDUINO_M5STACK_CORES3)
 constexpr char kFirmwareVersion[] = "0.1.0-cores3";

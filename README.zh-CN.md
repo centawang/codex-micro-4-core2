@@ -2,8 +2,8 @@
 
 [English](README.md)
 
-这是一个独立开发的开源兼容固件，可将 M5Stack Core2、CoreS3 或 StickS3
-变成 ChatGPT 桌面端 Codex Micro 功能的蓝牙控制器。
+这是一个独立开发的开源兼容固件，可将 M5Stack Core2、CoreS3、StickS3 或
+StopWatch 变成 ChatGPT 桌面端 Codex Micro 功能的蓝牙控制器。
 
 固件将 Core2 模拟为 BLE Vendor HID 设备，并通过触摸屏提供 6 个 Agent Key、
 6 个 Command Key、4 个摇杆方向和旋钮操作。任务状态颜色、电池状态、按键映射
@@ -24,6 +24,7 @@
 - 通过 BLE HID 上报 Core2 电池状态
 - 断开连接后自动重新广播
 - 使用 PSRAM 全屏 `M5Canvas` 双缓冲，实现无明显闪烁的 320 x 240 界面
+- 为 M5Stack StopWatch 提供专用 468 x 468 圆形 AMOLED 界面
 
 本项目是 Codex 控制器，不是通用蓝牙键盘。
 
@@ -31,7 +32,7 @@
 
 | 项目 | 支持或测试状态 |
 | --- | --- |
-| 硬件 | 已在 M5Stack Core2 实机上测试；CoreS3 和仅支持 Tasks 的 StickS3 均有独立构建环境 |
+| 硬件 | M5Stack Core2、CoreS3、StickS3 和 StopWatch 均有独立构建环境；StopWatch 已在实机上完成硬件识别和构建验证 |
 | 主机系统 | 已测试 macOS |
 | 主机应用 | 支持 Codex Micro 的 ChatGPT 桌面端 |
 | 通信方式 | 仅支持 Bluetooth Low Energy HID |
@@ -42,7 +43,7 @@
 
 ## 准备工作
 
-- M5Stack Core2、CoreS3 或 StickS3
+- M5Stack Core2、CoreS3、StickS3 或 StopWatch
 - 支持数据传输的 USB-C 线
 - [PlatformIO Core](https://docs.platformio.org/en/latest/core/index.html) 或
   PlatformIO IDE 扩展
@@ -51,8 +52,8 @@
 
 ## 编译和烧录
 
-工程提供三个 PlatformIO 环境。默认环境为 `m5stack-cores3`；其他目标请使用
-`-e m5stack-core2` 或 `-e m5stack-sticks3`。
+工程提供四个 PlatformIO 环境。默认环境为 `m5stack-cores3`；其他目标请使用
+`-e m5stack-core2`、`-e m5stack-sticks3` 或 `-e m5stack-stopwatch`。
 
 克隆仓库后执行：
 
@@ -68,6 +69,19 @@ pio device monitor
 pio run -e m5stack-sticks3
 pio run -e m5stack-sticks3 --target upload
 ```
+
+如需构建圆屏 StopWatch 固件，请执行：
+
+```sh
+pio run -e m5stack-stopwatch
+pio run -e m5stack-stopwatch --target upload
+```
+
+StopWatch 进入下载模式的方法：连接 USB-C，长按电源键约 2 秒，绿色 LED 亮起
+后松开。该目标使用 16 MB Flash、OPI PSRAM，并复用 M5Unified 内置的
+CO5300、CST820 和 M5PM1 驱动。可使用 M5Burner 中的 **StopWatch User Demo**
+或 [M5StopWatch-UserDemo](https://github.com/m5stack/M5StopWatch-UserDemo)
+恢复原厂固件。
 
 PlatformIO 会自动安装工程锁定的 ESP32 平台和声明的 Arduino 库。串口监视器
 波特率为 `115200`。启动成功后会输出：
@@ -121,6 +135,11 @@ USB 模式、物理配对控件、灯光硬件和额外层说明不适用于本 
 
 Core2 底部的 A、B、C 触摸按钮可直接切换三个页面。CoreS3 的触摸区域止于屏幕
 下边缘，没有对应的硬件按钮，请使用屏幕底部的标签栏切换页面。
+
+StopWatch 在 466 x 466 圆形 AMOLED 上提供相同的三个页面。可以点击屏幕标签，
+也可以用黄色/蓝色实体键切换到上一个/下一个页面。Agent、Command、方向和旋钮
+操作仍使用触摸，并针对圆形安全区域重新排布。有效触摸和实体翻页键会提供短促
+震动确认。
 
 ### Tasks 页面
 

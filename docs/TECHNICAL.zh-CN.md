@@ -11,7 +11,7 @@
 
 1. `src/main.cpp` 负责 Core2/CoreS3 屏幕、触摸区域检测、页面状态、电池轮询和
    渲染循环；`src/main_sticks3.cpp` 为较小的 StickS3 屏幕和两个按键提供独立的
-   Tasks 精简入口。
+   Tasks 精简入口；`src/main_stopwatch.cpp` 将完整三页界面移植到 StopWatch 圆屏。
 2. `src/CodexMicroBle.cpp` 负责 BLE 初始化、HID 描述符、报告分帧、JSON 解析、
    主机请求处理和向主机发送通知。
 
@@ -41,11 +41,11 @@ PlatformIO 环境保持精简并锁定关键版本：
 | 设置 | 值 |
 | --- | --- |
 | Platform | `espressif32@6.13.0` |
-| Board | `m5stack-core2`、`m5stack-cores3`，或按 StickS3 配置的通用 `esp32-s3-devkitc-1` |
+| Board | `m5stack-core2`、`m5stack-cores3`、按 StickS3 配置的 `esp32-s3-devkitc-1`，或按 StopWatch 配置的 `esp32s3box` |
 | Framework | Arduino |
 | 串口监视器 | 115200 baud |
-| 烧录速度 | Core2 1,500,000 baud；CoreS3 921,600 baud |
-| 屏幕和硬件库 | `M5Unified ^0.2.7` |
+| 烧录速度 | Core2 1,500,000 baud；ESP32-S3 目标 921,600 baud |
+| 屏幕和硬件库 | `M5Unified ^0.2.7`；StopWatch 自动识别使用当前 Git 版 M5Unified/M5GFX/M5PM1/M5IOE1 |
 | JSON 库 | `ArduinoJson ^6.21.5` |
 
 当前传输层依赖所选 PlatformIO 平台提供的 Arduino-ESP32 2.x BLE HID 实现。
@@ -142,7 +142,7 @@ Agent ID 为 `AG00` 至 `AG05`。默认 Command ID 为 `ACT06`、`ACT07`、
 
 | Method | 行为 |
 | --- | --- |
-| `sys.version` | 返回 `0.1.0-core2`、`0.1.0-cores3` 或 `0.1.0-sticks3` |
+| `sys.version` | 返回 `0.1.0-core2`、`0.1.0-cores3`、`0.1.0-sticks3` 或 `0.1.0-stopwatch` |
 | `device.status` | 返回版本、Profile、Layer、电池和充电状态 |
 | `v.oai.thstatus` | 更新 6 个 Agent 状态灯中的一个或多个 |
 | `v.oai.rgbcfg` | 保存主机下发的环境灯光和按键灯光配置 |
@@ -173,6 +173,15 @@ Agent ID 为 `AG00` 至 `AG05`。默认 Command ID 为 `ACT06`、`ACT07`、
 CoreS3 的触摸面板只覆盖 320 x 240 屏幕区域，M5Unified 不会上报这三个按钮，
 因此只能使用底部标签栏切换页面。
 
+StopWatch 使用专用 468 x 468 设计坐标映射到圆形 CO5300 AMOLED。6 个 Agent 和
+Command 控件采用两列三行网格，Navigate 页面采用环形方向布局。黄色/蓝色实体键
+（`M5.BtnA`/`M5.BtnB`，GPIO 2/1）负责前后翻页，CST820 触摸屏负责所有动作。
+
+有效触摸、屏幕标签切换和实体翻页键会触发 35 ms、强度 128/255 的震动脉冲。
+`M5.Power.setVibration()` 通过 M5IOE1 PWM1 驱动 StopWatch 马达。`loop()` 使用
+支持 `millis()` 回绕的时间差计算关闭脉冲，因此震动不会延迟 BLE 处理或 HID
+释放报告；触摸无效区域不会震动。
+
 StickS3 入口没有触摸页面，而是以竖向列表显示全部 6 个 Agent 状态。默认映射
 为：单击 `BtnB` 向后移动高亮项，在 350 ms 内双击向前移动，长按 500 ms
 打开当前高亮 Agent；单击 `BtnA` 发送回车，双击发送右 Alt。所有手势都可在
@@ -200,8 +209,9 @@ StickS3 入口没有触摸页面，而是以竖向列表显示全部 6 个 Agent
 `stick-power` NVS 命名空间中。应用新时间会重新开始空闲计时；若屏幕已经变暗，
 则立即恢复正常亮度。
 
-触摸命中区域按 320 x 240 横屏方向固定。Agent Key、Command Key、方向控件和
-旋钮按下都会发送按下与释放事件。旋钮旋转控件在触摸时立即发送一次步进动作。
+Core2/CoreS3 触摸命中区域按 320 x 240 横屏方向固定；StopWatch 命中区域从
+468 x 468 设计坐标缩放。Agent Key、Command Key、方向控件和旋钮按下都会发送
+按下与释放事件。旋钮旋转控件在触摸时立即发送一次步进动作。
 
 Core2/CoreS3 触摸界面本地不计算双击间隔，也不判断打开设置所需的 500 ms
 按住时间，而是由 ChatGPT 桌面端解释按下和释放序列。StickS3 入口会在本地
@@ -224,6 +234,9 @@ token 验证和 `millis()` 回绕行为由 native Unity 单元测试覆盖。
 存在 `breath` 效果的任务状态大约每 80 ms 重绘一次。其他页面仅在触摸输入、
 连接变化或主机状态变化时重绘。
 StickS3 构建使用相同的双缓冲流程，分辨率为原生 135 x 240 竖屏。
+StopWatch 同样使用全帧双缓冲，Sprite 为 468 x 468 并存放在 PSRAM。M5Unified
+通过 GPIO 47/48 上的 CST820、M5PM1 和 M5IOE1 自动识别
+`board_M5StopWatch`，随后初始化 QSPI CO5300 屏幕和电源轨。
 
 ## 电池与电源
 
