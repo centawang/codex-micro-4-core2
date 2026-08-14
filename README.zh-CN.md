@@ -6,8 +6,8 @@
 StopWatch 变成 ChatGPT 桌面端 Codex Micro 功能的蓝牙控制器。
 
 固件将 Core2 模拟为 BLE Vendor HID 设备，并通过触摸屏提供 6 个 Agent Key、
-6 个 Command Key、4 个摇杆方向和旋钮操作。任务状态颜色、电池状态、按键映射
-和按住说话功能由 ChatGPT 桌面端处理。
+6 个 Command Key、摇杆和旋钮操作。StopWatch 使用连续虚拟摇杆和触摸旋钮。
+任务状态颜色、电池状态、按键映射和按住说话功能由 ChatGPT 桌面端处理。
 
 > [!IMPORTANT]
 > 本项目是非官方兼容实现，与 OpenAI、Work Louder 或 M5Stack 没有隶属、授权、
@@ -18,7 +18,8 @@ StopWatch 变成 ChatGPT 桌面端 Codex Micro 功能的蓝牙控制器。
 
 - 6 个触摸式 Agent Key，显示任务状态颜色和呼吸动画
 - 6 个默认 Command Key：Fast、Approve、Decline、Fork、Mic、Send
-- 4 个触摸方向键，对应摇杆的四个方向
+- Core2/CoreS3 提供 4 个触摸方向键，对应摇杆的四个方向
+- StopWatch 提供连续虚拟摇杆和旋钮环形拖动手势
 - 旋钮逆时针、顺时针、按下和按住 500 ms 操作
 - 支持在 ChatGPT 桌面端重新映射命令键和方向动作
 - 通过 BLE HID 上报 Core2 电池状态
@@ -173,11 +174,20 @@ Mic 动作使用电脑麦克风。本固件不会采集或通过蓝牙传输 Cor
 
 ### Navigate 页面
 
+在 Core2/CoreS3 上：
+
 - `UP`、`RIGHT`、`DOWN`、`LEFT` 模拟摇杆的四个方向，副标签显示主机默认
   动作：Plan 模式、前进、侧边栏、后退。
 - `CCW` 和 `CW` 分别模拟一次旋钮逆时针和顺时针步进。
 - 点击 `DIAL` 模拟按下旋钮。
 - 按住 `DIAL` 至少 500 ms，请求打开 Codex Micro 设置。
+
+在 StopWatch 上：
+
+- 向任意方向拖动虚拟摇杆，固件会连续上报角度和距离，包括中心到外环之间的
+  部分行程。
+- 沿旋钮外环拖动，模拟顺时针或逆时针编码器步进。
+- 按下或按住旋钮中心，模拟普通旋钮按下和 500 ms 设置操作。
 
 动作映射由 ChatGPT 桌面端选择。Core2 上的标签显示原始默认布局，在主机端
 重新映射后不会同步改变。

@@ -8,8 +8,9 @@ Micro features in the ChatGPT desktop app.
 
 The firmware presents the Core2 as a BLE vendor HID device and provides a
 touchscreen interface for six Agent Keys, six Command Keys, four analog-stick
-directions, and dial actions. Task status colors, battery state, command
-remapping, and push-to-talk integration are handled by ChatGPT Desktop.
+directions, and dial actions. StopWatch uses a continuous virtual joystick and
+touch rotary dial. Task status colors, battery state, command remapping, and
+push-to-talk integration are handled by ChatGPT Desktop.
 
 > [!IMPORTANT]
 > This project is an unofficial compatibility implementation. It is not
@@ -21,7 +22,8 @@ remapping, and push-to-talk integration are handled by ChatGPT Desktop.
 
 - Six touchscreen Agent Keys with task status colors and breathing animation
 - Six default Command Keys: Fast, Approve, Decline, Fork, Mic, and Send
-- Four touchscreen directions for actions assigned to the analog stick
+- Four touchscreen directions on Core2/CoreS3 for analog-stick assignments
+- Continuous virtual joystick and rotary dial gestures on StopWatch
 - Dial counterclockwise, clockwise, press, and 500 ms hold behavior
 - ChatGPT Desktop command and direction remapping
 - Core2 battery reporting over BLE HID
@@ -192,11 +194,22 @@ captured or streamed by this firmware.
 
 ### Navigate page
 
+On Core2/CoreS3:
+
 - `UP`, `RIGHT`, `DOWN`, and `LEFT` emulate the four analog-stick directions.
   Their sublabels show the host defaults: Plan mode, Forward, Sidebar, and Back.
 - `CCW` and `CW` emulate one dial step in each direction.
 - Tap `DIAL` to press the dial.
 - Hold `DIAL` for at least 500 ms to request Codex Micro settings.
+
+On StopWatch:
+
+- Drag the virtual joystick in any direction. Angle and distance are reported
+  continuously, including partial travel between the center and outer ring.
+- Drag around the dial's outer ring to emit clockwise or counterclockwise
+  encoder steps.
+- Press or hold the dial center for the normal dial press and 500 ms settings
+  behavior.
 
 Mappings are selected in ChatGPT Desktop. Labels on the Core2 show the original
 default layout and do not change after host-side remapping.

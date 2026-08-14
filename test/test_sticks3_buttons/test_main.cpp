@@ -10,6 +10,7 @@
 #include "StickS3PowerController.h"
 #include "StickS3ScreenFlash.h"
 #include "StopWatchButtonController.h"
+#include "StopWatchNavigateControl.h"
 #include "StopWatchSwipe.h"
 
 namespace {
@@ -21,6 +22,7 @@ using codex_micro::StickS3PowerController;
 using codex_micro::StickS3ScreenFlash;
 using codex_micro::StopWatchButtonAction;
 using codex_micro::StopWatchButtonController;
+using codex_micro::StopWatchDialGesture;
 
 struct FakeAgentStatus {
   uint32_t color = 0;
@@ -117,6 +119,36 @@ void testStopWatchButtonTimersSurviveMillisRollover() {
               TEST_ASSERT_EQUAL_INT8(
                 0, codex_micro::stopWatchSwipePageDelta(-80, 80));
             }
+
+void testStopWatchJoystickUsesContinuousAngleAndDistance() {
+  const auto right =
+      codex_micro::stopWatchJoystickPosition(10, 0, 0, 0, 10);
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, right.angle);
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.0f, right.distance);
+
+  const auto halfDown =
+      codex_micro::stopWatchJoystickPosition(0, 5, 0, 0, 10);
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.25f, halfDown.angle);
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.5f, halfDown.distance);
+
+  const auto up =
+      codex_micro::stopWatchJoystickPosition(0, -20, 0, 0, 10);
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.75f, up.angle);
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.0f, up.distance);
+}
+
+void testStopWatchDialTracksClockwiseAndCounterclockwiseSteps() {
+  StopWatchDialGesture dial(4);
+  dial.begin(10, 0, 0, 0);
+  TEST_ASSERT_EQUAL_INT(1, dial.update(0, 10, 0, 0));
+  TEST_ASSERT_EQUAL_INT(-1, dial.update(10, 0, 0, 0));
+}
+
+void testStopWatchDialHandlesAngleWraparound() {
+  StopWatchDialGesture dial(16);
+  dial.begin(-10, 2, 0, 0);
+  TEST_ASSERT_EQUAL_INT(1, dial.update(-10, -2, 0, 0));
+}
 
 void testButtonASingleClickSendsEnterAfterWindow() {
   StickS3ButtonController buttons;
@@ -593,6 +625,9 @@ int main(int, char**) {
   RUN_TEST(testStopWatchButtonTimersSurviveMillisRollover);
   RUN_TEST(testStopWatchHorizontalSwipesMapToPageDirection);
   RUN_TEST(testStopWatchSwipeRejectsShortAndVerticalMotion);
+  RUN_TEST(testStopWatchJoystickUsesContinuousAngleAndDistance);
+  RUN_TEST(testStopWatchDialTracksClockwiseAndCounterclockwiseSteps);
+  RUN_TEST(testStopWatchDialHandlesAngleWraparound);
   RUN_TEST(testButtonASingleClickSendsEnterAfterWindow);
   RUN_TEST(testButtonADoubleClickAtBoundarySendsRightAltOnly);
   RUN_TEST(testZeroDoubleClickWindowOnlyAcceptsSameTimestamp);

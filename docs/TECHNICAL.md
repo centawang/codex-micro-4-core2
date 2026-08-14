@@ -190,7 +190,8 @@ is the only page control.
 
 StopWatch uses a dedicated 468 x 468 design coordinate system on its round
 CO5300 AMOLED. The six Agent and Command controls use a two-column by three-row
-grid inside the circular safe area; Navigate uses a radial direction layout.
+grid inside the circular safe area. Navigate uses a circular virtual joystick
+beside a touch rotary dial.
 The yellow/blue physical buttons (`M5.BtnA`/`M5.BtnB`, GPIO 2/1) use a 350 ms
 double-click window. Yellow single-click taps Right Alt for Mic and double-click
 moves to the previous page. Blue single-click taps Enter and double-click moves
@@ -239,8 +240,11 @@ restarts the inactivity timer and restores the display if it was dimmed.
 
 Core2/CoreS3 touch hit areas are fixed for the 320 x 240 landscape orientation;
 StopWatch hit areas scale from its 468 x 468 design space. Press and release
-events are sent for Agent Keys, Command Keys, directional controls, and the dial
-press. Dial rotation controls send one encoder-step action immediately.
+events are sent for Agent Keys, Command Keys, and dial presses. On StopWatch,
+the virtual joystick captures motion inside its control and reports normalized
+angle and distance at most once every 32 ms. The dial outer ring accumulates
+angular movement into 24 encoder steps per revolution; its center preserves the
+normal dial press/release and host-side hold behavior.
 
 The Core2/CoreS3 touch UI does not implement double-click timing or the 500 ms
 settings hold locally; ChatGPT Desktop interprets those press/release sequences.
@@ -322,8 +326,8 @@ app before publishing a firmware release.
 - One connected host at a time
 - No user-selectable Bluetooth slots
 - No conventional keyboard keys or text input
-- Digital four-direction input instead of a continuous analog stick
-- No physical encoder; rotation is exposed as touch buttons
+- Core2/CoreS3 use digital four-direction input instead of a continuous stick
+- No physical encoder; StopWatch rotation uses a touch ring
 - No ambient or per-key LEDs
 - No extra Work Louder layers or Work Louder configuration support
 - No over-the-air updater or rollback mechanism
